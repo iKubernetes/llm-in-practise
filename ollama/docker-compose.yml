@@ -1,0 +1,32 @@
+version: "3.3"
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"  # 将容器端口映射到本地
+    tty: true
+    restart: unless-stopped      
+    healthcheck:
+      test: ollama --version || exit 1
+    volumes:
+      - ./ollama:/root/.ollama  # 持久化模型数据到本地目录
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:ollama
+    container_name: open-webui
+    ports:
+      - "3000:8080"
+    environment:
+      - 'OLLAMA_BASE_URL=http://ollama:11434'
+      - 'WEBUI_SECRET_KEY='
+      - 'HF_ENDPOINT=https://hf-mirror.com'
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    depends_on:
+    - ollama
+    restart: unless-stopped
+    volumes:
+      - ./ollama:/root/.ollama  # 共享 Ollama 数据
+      - ./open-webui:/app/backend/data
