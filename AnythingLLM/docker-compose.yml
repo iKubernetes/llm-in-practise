@@ -1,0 +1,45 @@
+version: "3.8"
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"  # 将容器端口映射到本地
+    restart: unless-stopped 
+    healthcheck:
+      test: ollama --version || exit 1
+    volumes:
+      - ./ollama:/root/.ollama  # 持久化模型数据到本地目录
+
+  anythingllm:
+    image: mintplexlabs/anythingllm
+    container_name: anythingllm
+    ports:
+    - "3001:3001"
+    cap_add:
+      - SYS_ADMIN
+    volumes:
+      # 该卷对应的目录，需要确保默认的“UID:1000”用户具有写权限
+      - ./anythingllm:/app/server/storage
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped 
+    environment:
+    # Adjust for your environment
+      - STORAGE_DIR=/app/server/storage
+      - JWT_SECRET="28905cae896f0c97magedu.com"
+      - LLM_PROVIDER=ollama
+      - OLLAMA_BASE_PATH=http://ollama:11434
+      - OLLAMA_MODEL_PREF='erwan2/DeepSeek-R1-Distill-Qwen-1.5B'
+      - OLLAMA_MODEL_TOKEN_LIMIT=4096
+      - EMBEDDING_ENGINE=ollama
+      - EMBEDDING_BASE_PATH=http://ollama:11434
+      - EMBEDDING_MODEL_PREF='nomic-embed-text:latest'
+      - EMBEDDING_MODEL_MAX_CHUNK_LENGTH=8192
+      - VECTOR_DB=lancedb
+      - WHISPER_PROVIDER=local
+      - TTS_PROVIDER=native
+      - PASSWORDMINCHAR=8
+      - UID='1000'
+      - GID='1000'
