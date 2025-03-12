@@ -23,8 +23,7 @@ docker-compose exec ollama ollama pull erwan2/DeepSeek-R1-Distill-Qwen-1.5B
 
 ### 访问Open WebUI
 
-访问入口是“http://HOST:3000”，其中的HOST是Docker Compose所在的主机地址。创建账号后即可例如使用。
+访问入口是“http://HOST:8080”， 其中的HOST是Docker Compose所在的主机地址。创建账号后即可例如使用。
 
 需要注意的是，Open WebUI初始化的时间较长（需联网下载更新），首次访问需要耐心等待。
-
 
