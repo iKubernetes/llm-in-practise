@@ -3,9 +3,9 @@ import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 
 class Config:
-    seq_len = 16        # 输入序列长度
+    seq_len = 64        # 输入序列长度
     n_layer = 4         # Transformer层数
-    n_head = 2          # 注意力头数
+    n_head = 4          # 注意力头数
     embed_dim = 128     # 嵌入维度
     dropout = 0.1       # Dropout概率
     lr = 3e-4           # 学习率

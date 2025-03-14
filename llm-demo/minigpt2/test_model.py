@@ -4,7 +4,7 @@ import json
 
 class GPTTester:
     def __init__(self, model_path="minigpt_model.pth"):
-        # 加载完整模型信息[5](@ref)
+        # 加载完整模型信息
         checkpoint = torch.load(model_path, map_location='cpu')
         
         # 动态重建配置对象
@@ -15,7 +15,7 @@ class GPTTester:
         # 初始化模型架构
         self.model = MiniGPT(self.config)
         self.model.load_state_dict(checkpoint['model_state'])
-        self.model.eval()  # 进入评估模式[6](@ref)
+        self.model.eval()  # 进入评估模式
         
         # 加载字符映射表
         self.stoi = checkpoint['stoi']
@@ -34,7 +34,7 @@ class GPTTester:
 
     def generate(self, prompt, max_len=100, temperature=0.8):
         """文本生成主函数"""
-        with torch.no_grad():  # 禁用梯度计算[2](@ref)
+        with torch.no_grad():  # 禁用梯度计算
             generated = []
             input_seq = self.preprocess(prompt)
             
@@ -67,7 +67,7 @@ class GPTTester:
 if __name__ == "__main__":
     tester = GPTTester()
     
-    # 执行维度验证测试[2](@ref)
+    # 执行维度验证测试
     tester.test_output_shape()
     
     # 示例生成测试
