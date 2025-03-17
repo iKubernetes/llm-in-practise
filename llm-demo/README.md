@@ -21,14 +21,15 @@ eval "$(/root/miniconda3/bin/conda shell.bash hook)"
 conda create --name llm python=3.12
 ```
 
-初始化：
-```bash
-conda init
-```
-
-激活虚拟环境
+激活虚拟环境。
 ```bash
 conda activate llm 
+```
+
+随后即可使用该虚拟环境。若需要禁止当前虚拟环境， 则使用类似如下命令。
+
+```bash
+conda deactivate
 ```
 
 ## 在Conda环境中安装Python模块
@@ -58,5 +59,15 @@ pip config set global.index-url MIRROR
 
 示例：设置使用腾讯的MIRROR
 pip config set global.index-url http://mirrors.cloud.tencent.com/pypi/simple
+```
+
+可用的部分国内源。
+
+```
+清华大学TUNA镜像源： https://pypi.tuna.tsinghua.edu.cn/simple
+阿里云镜像源： http://mirrors.aliyun.com/pypi/simple/
+中国科学技术大学镜像源： https://mirrors.ustc.edu.cn/pypi/simple/
+华为云镜像源： https://repo.huaweicloud.com/repository/pypi/simple/
+腾讯云镜像源：https://mirrors.cloud.tencent.com/pypi/simple/
 ```
 
