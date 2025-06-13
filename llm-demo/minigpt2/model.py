@@ -3,7 +3,7 @@ import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 
 class Config:
-    seq_len = 64        # 输入序列长度
+    seq_len = 256        # 输入序列长度
     n_layer = 4         # Transformer层数
     n_head = 4          # 注意力头数
     embed_dim = 128     # 嵌入维度
@@ -19,7 +19,7 @@ class TextDataset(Dataset):
         self.stoi = {ch:i for i,ch in enumerate(chars)}
         self.itos = {i:ch for i,ch in enumerate(chars)}
         
-        # 动态设置词汇量[1](@ref)
+        # 动态设置词汇量
         config.vocab_size = len(chars)  
         
         data = [self.stoi[ch] for ch in text]
