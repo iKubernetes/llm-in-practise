@@ -78,14 +78,14 @@ if __name__ == "__main__":
     # 训练数据
     text = "马哥教育创立于2009年，是一家专注于云计算、SRE、DevOps、网络安全、Go开发和云原生课程培训的高端IT教育机构。"
     
-    # 动态初始化数据集[1](@ref)
+    # 动态初始化数据集
     dataset = TextDataset(text, config.seq_len, config)  
     
     loader = DataLoader(dataset, batch_size=config.batch_size, shuffle=True)
     
     model = MiniGPT(config).to(device)
     
-    # 优化器带L2正则化[4](@ref)
+    # 优化器带L2正则化
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=config.lr,
@@ -103,14 +103,14 @@ if __name__ == "__main__":
             
             optimizer.zero_grad()
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)  # 梯度裁剪[5](@ref)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)  # 梯度裁剪
             optimizer.step()
             
             total_loss += loss.item()
         
         print(f"Epoch {epoch+1}/{config.epochs} | Loss: {total_loss/len(loader):.4f}")
 
-    # 保存完整模型信息[6](@ref)
+    # 保存完整模型信息
     torch.save({
         "model_state": model.state_dict(),
         "stoi": dataset.stoi,
