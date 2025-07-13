@@ -1,0 +1,17 @@
+# kubernetes/model_retrain_cronjob.yaml
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: model-retrain
+  namespace: sre
+spec:
+  schedule: "0 0 * * 0"  # 每周日凌晨
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: retrain
+            image: fault-prediction-trainer:latest
+            command: ["python", "src/model_training.py"]
+          restartPolicy: OnFailure

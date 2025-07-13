@@ -1,0 +1,5 @@
+prediction:
+  threshold: 0.7
+kafka:
+  bootstrap_servers: "kafka:9092"
+  topic: "system_metrics"
