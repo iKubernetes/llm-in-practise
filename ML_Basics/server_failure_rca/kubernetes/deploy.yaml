@@ -1,0 +1,72 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: server-failure-rca
+  namespace: default
+  labels:
+    app: server-failure-rca
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: server-failure-rca
+  template:
+    metadata:
+      labels:
+        app: server-failure-rca
+    spec:
+      containers:
+      - name: server-failure-rca
+        image: server-failure-rca:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8000
+        env:
+        - name: PYTHONPATH
+          value: "/app"
+        - name: CONFIG_PATH
+          value: "/app/config/config.yaml"
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        volumeMounts:
+        - name: model-volume
+          mountPath: /app/models
+        - name: log-volume
+          mountPath: /app/logs
+      volumes:
+      - name: model-volume
+        emptyDir: {}
+      - name: log-volume
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: server-failure-rca-service
+  namespace: default
+spec:
+  selector:
+    app: server-failure-rca
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8000
+  type: ClusterIP
