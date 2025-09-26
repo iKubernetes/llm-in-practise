@@ -1,0 +1,2 @@
+172.25.0.100 slots=1 bash -c "source /path/to/conda/bin/activate deepspeed && exec $SHELL"  # 使用了2张GPU
+172.25.0.200 slots=1 bash -c "source /path/to/conda/bin/activate deepspeed && exec $SHELL"  # 使用了1张GPU
