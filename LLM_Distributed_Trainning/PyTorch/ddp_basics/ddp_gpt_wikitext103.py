@@ -11,6 +11,8 @@
     torchrun --nproc_per_node=2 train_ddp.py --epochs 3 --batch_size 8
 
     # 两台机器，每台 2 GPU（假设已经设置 MASTER_ADDR/MASTER_PORT 等）
+    # export MASTER_ADDR="aihost1.magedu.com"
+    # export MASTER_PORT=29500
     torchrun --nnodes=2 --nproc_per_node=2 --node_rank=0 train_ddp.py --epochs 3 --batch_size 8
     torchrun --nnodes=2 --nproc_per_node=2 --node_rank=1 train_ddp.py --epochs 3 --batch_size 8
 

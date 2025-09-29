@@ -11,6 +11,8 @@
     torchrun --nproc_per_node=2 train_ddp.py --epochs 3 --batch_size 8
 
     # 两台机器，每台 2 GPU（假设已经设置 MASTER_ADDR/MASTER_PORT 等）
+    # export MASTER_ADDR="aihost1.magedu.com"
+    # export MASTER_PORT=29500
     torchrun --nnodes=2 --nproc_per_node=2 --node_rank=0 train_ddp.py --epochs 3 --batch_size 8
     torchrun --nnodes=2 --nproc_per_node=2 --node_rank=1 train_ddp.py --epochs 3 --batch_size 8
 
@@ -79,7 +81,7 @@ class TokenizedDataset(Dataset):
         return block[:-1], block[1:]  # 输入和目标（偏移一位）
 
 # -----------------------------
-# 模型定义（与你原脚本一致）
+# 模型定义（与原脚本一致）
 # -----------------------------
 class CausalSelfAttention(nn.Module):
     def __init__(self, d_model, n_head, dropout=0.1):
