@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
 """
 简化的 GPT-like 模型训练脚本（FSDP 教学版）
-支持单机/单GPU、单机/多GPU、以及多机多GPU（基于 torch.distributed）.
-
-使用示例（单机单GPU或CPU）:
-    python fsdp_gtp_wikitext2.py --epochs 3 --batch_size 16
+支持单机/单GPU、单机/多GPU、以及多机多GPU（基于 torch.distributed 和 FSDP）。
+此脚本适用于 PyTorch 2.0 及以上版本，检查点保存使用 torch.distributed.checkpoint 适配 PyTorch 2.4+。
 
 使用示例（多GPU/多机建议用 torchrun）:
     # 单机 2 GPU
-    torchrun --nproc_per_node=2 fsdp_gtp_wikitext2.py --epochs 3 --batch_size 8
+    torchrun --nproc_per_node=2 fsdp_gpt_wikitext2.py --epochs 3 --batch_size 8
 
     # 两台机器，每台 2 GPU（假设已经设置 MASTER_ADDR/MASTER_PORT 等）
     # export MASTER_ADDR="aihost1.magedu.com"
     # export MASTER_PORT=29500
-    torchrun --nnodes=2 --nproc_per_node=2 --node_rank=0 fsdp_gtp_wikitext2.py --epochs 3 --batch_size 8
-    torchrun --nnodes=2 --nproc_per_node=2 --node_rank=1 fsdp_gtp_wikitext2.py --epochs 3 --batch_size 8
+    # 在第一台机器 (node_rank=0)
+    torchrun --nnodes=2 --nproc_per_node=2 --node_rank=0 fsdp_gpt_wikitext2.py --epochs 3 --batch_size 8
+    # 在第二台机器 (node_rank=1)
+    torchrun --nnodes=2 --nproc_per_node=2 --node_rank=1 fsdp_gpt_wikitext2.py --epochs 3 --batch_size 8
 
 注意:
 - --batch_size 是“每个进程”的 batch size（即每张卡的 batch size）
@@ -25,7 +25,7 @@ import os
 import logging
 import math
 from pathlib import Path
-import functools
+import functools  # 导入 functools 用于 auto_wrap_policy
 
 import torch
 import torch.nn as nn
@@ -34,13 +34,19 @@ import torch.distributed as dist
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
+# 导入 FSDP 相关模块（适配 PyTorch 2.0+）
+from torch.distributed.fsdp import (
+    FullyShardedDataParallel as FSDP,
+    MixedPrecision,
+    ShardingStrategy,
+    CPUOffload
+)
+from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
+# 导入 checkpoint 相关模块（适配 PyTorch 2.4+ 的新 API）
+from torch.distributed.checkpoint.state_dict import get_state_dict, StateDictOptions
+
 from transformers import BertTokenizer
 from datasets import load_dataset
-
-from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
-from torch.distributed.fsdp import ShardingStrategy, MixedPrecision, CPUOffload
-from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
-from torch.distributed.fsdp import FullStateDictConfig, StateDictType
 
 logging.basicConfig(level="INFO", format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -87,7 +93,7 @@ class TokenizedDataset(Dataset):
         return block[:-1], block[1:]  # 输入和目标（偏移一位）
 
 # -----------------------------
-# 模型定义（与原脚本一致）
+# 模型定义
 # -----------------------------
 class CausalSelfAttention(nn.Module):
     def __init__(self, d_model, n_head, dropout=0.1):
@@ -174,20 +180,18 @@ class GPTLike(nn.Module):
 # 分布式工具函数
 # -----------------------------
 def setup_distributed(args):
-    """根据环境与参数初始化分布式（如未检测到分布式环境，则返回 False）"""
-    # local_rank 可以由 torchrun 注入为 --local_rank，或从环境变量 LOCAL_RANK 读取
+    """根据环境与参数初始化分布式"""
     local_rank = int(os.environ.get("LOCAL_RANK", -1)) if args.local_rank is None else args.local_rank
-    # world_size 和 rank 从环境变量读取（torchrun 会设置）
     world_size = int(os.environ.get("WORLD_SIZE", "1"))
     rank = int(os.environ.get("RANK", "0"))
 
     is_distributed = world_size > 1
     if is_distributed:
-        # 使用 env:// 初始化（需设置 MASTER_ADDR/MASTER_PORT 或使用 torchrun）
         dist.init_process_group(backend="nccl" if torch.cuda.is_available() else "gloo", init_method="env://")
     return is_distributed, local_rank, rank, world_size
 
 def cleanup_distributed():
+    """清理分布式环境"""
     if dist.is_initialized():
         dist.destroy_process_group()
 
@@ -198,15 +202,14 @@ def main():
     import argparse
     parser = argparse.ArgumentParser(description="简化的 GPT-like 模型训练（FSDP 教学版）")
     parser.add_argument("--epochs", type=int, default=3, help="训练轮数")
-    parser.add_argument("--batch_size", type=int, default=16, help="每个进程的批次大小（per-process）")
+    parser.add_argument("--batch_size", type=int, default=8, help="每个进程的批次大小")
     parser.add_argument("--block_size", type=int, default=256, help="序列块大小（不得超过 512）")
     parser.add_argument("--lr", type=float, default=3e-4, help="学习率")
     parser.add_argument("--n_layer", type=int, default=6, help="Transformer 层数")
     parser.add_argument("--n_head", type=int, default=12, help="注意力头数")
     parser.add_argument("--d_model", type=int, default=768, help="模型维度")
     parser.add_argument("--dropout", type=float, default=0.1, help="Dropout 比率")
-    # 为兼容旧的 launcher，保留 local_rank 参数（torchrun 会注入）
-    parser.add_argument("--local_rank", type=int, default=None, help="本地 GPU id（由 torch.distributed 启动器自动传入）")
+    parser.add_argument("--local_rank", type=int, default=None, help="本地 GPU id（由启动器自动传入）")
     args = parser.parse_args()
 
     if args.block_size > 512:
@@ -214,19 +217,14 @@ def main():
     if args.d_model % args.n_head != 0:
         raise ValueError(f"d_model ({args.d_model}) 必须能被 n_head ({args.n_head}) 整除")
 
-    # 初始化分布式（如果是多进程运行）
+    # 初始化分布式环境
     is_distributed, local_rank, rank, world_size = setup_distributed(args)
 
     # 设备设置
     if torch.cuda.is_available():
         if is_distributed:
-            # local_rank 由 torchrun 注入；若仍为 -1，则尝试从环境变量读取
-            if local_rank is None or local_rank < 0:
-                local_rank = int(os.environ.get("LOCAL_RANK", 0))
             torch.cuda.set_device(local_rank)
-            device = torch.device(f"cuda:{local_rank}")
-        else:
-            device = torch.device("cuda:0")
+        device = torch.device(f"cuda:{local_rank if is_distributed else 0}")
     else:
         device = torch.device("cpu")
 
@@ -235,7 +233,7 @@ def main():
         logger.info(f"运行信息 is_distributed={is_distributed}, rank={rank}, world_size={world_size}, local_rank={local_rank}")
         logger.info(f"使用设备: {device}")
 
-    # 加载数据和分词器（为了示例简洁，在每个进程都加载 tokenizer 与原始文本）
+    # 加载数据和分词器
     texts = prepare_data()
     tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
     vocab_size = tokenizer.vocab_size
@@ -245,18 +243,13 @@ def main():
     # 创建数据集与分布式采样器
     dataset = TokenizedDataset(texts, tokenizer, block_size=args.block_size)
 
-    if is_distributed:
-        sampler = DistributedSampler(dataset, num_replicas=world_size, rank=rank, shuffle=True)
-        shuffle = False  # sampler 控制 shuffle
-    else:
-        sampler = None
-        shuffle = True
+    sampler = DistributedSampler(dataset, num_replicas=world_size, rank=rank, shuffle=True) if is_distributed else None
 
     dataloader = DataLoader(
         dataset,
         batch_size=args.batch_size,
         sampler=sampler,
-        shuffle=shuffle,
+        shuffle=(sampler is None),
         drop_last=True,
         num_workers=4,
         pin_memory=torch.cuda.is_available()
@@ -272,46 +265,61 @@ def main():
         dropout=args.dropout
     )
 
+    # 将模型移动到设备（在 FSDP 封装之前）
     model.to(device)
 
     if is_distributed:
-        # FSDP 配置：提供分片策略的定义（使用默认值），并支持修改为其它策略（其它策略以注释格式同时提供）
-        # 基于默认值提供自动包装策略的定义（支持修改为其它策略）
-        # cpu_offload的值为False
-        auto_wrap_policy = functools.partial(transformer_auto_wrap_policy, transformer_layer_cls={TransformerBlock})  # 默认自动包装策略：针对 TransformerBlock 进行包装
-        # 其他自动包装策略示例（取消注释启用）：
-        # from torch.distributed.fsdp.wrap import size_based_auto_wrap_policy
-        # auto_wrap_policy = size_based_auto_wrap_policy(min_num_params=1e5)  # 基于参数大小的自动包装
-
-        sharding_strategy = ShardingStrategy.FULL_SHARD  # 默认分片策略：全参数分片
-        # 其他分片策略（取消注释启用）：
-        # sharding_strategy = ShardingStrategy.SHARD_GRAD_OP  # 只分片梯度操作
-        # sharding_strategy = ShardingStrategy.NO_SHARD  # 无分片，等同于 DDP
-        # sharding_strategy = ShardingStrategy.HYBRID_SHARD  # 混合分片（组内全分片，组间复制）
-
-        mixed_precision = MixedPrecision(
-            param_dtype=torch.float32,  # 参数精度
-            reduce_dtype=torch.float32,  # 梯度通信精度
-            buffer_dtype=torch.float32,  # 缓冲区精度
+        # ------------ FSDP 配置开始 ------------
+        # 定义 FSDP 自动包裹策略，使用 functools.partial 固定 transformer_auto_wrap_policy 参数
+        # transformer_auto_wrap_policy 是一个可调用函数（policy callable），由 FSDP 在包裹时调用
+        # 参数：
+        # - transformer_layer_cls: 指定需要包裹的 Transformer 层类集合
+        # - min_num_params: 可选，模块参数少于此值不分片（默认注释掉）
+        auto_wrap_policy = functools.partial(
+            transformer_auto_wrap_policy,
+            transformer_layer_cls={TransformerBlock},
+            # min_num_params=10_000_000  # 可选，小于此值的模块不分片
         )
 
-        cpu_offload = CPUOffload(offload_params=False)  # CPU offload 为 False
+        # 设置分片策略（默认全分片）
+        sharding_strategy = ShardingStrategy.FULL_SHARD
+        # 其他可用分片策略（可通过修改启用）：
+        # ShardingStrategy.SHARD_GRAD_OP  # 仅分片梯度和优化器状态
+        # ShardingStrategy.NO_SHARD       # 不分片，等同于 DDP
 
-        model = FSDP(
+        # 配置混合精度（检查 GPU 是否支持 bfloat16）
+        torch_dtype = torch.bfloat16 if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else torch.float32
+        mixed_precision_policy = MixedPrecision(
+            param_dtype=torch_dtype,   # 参数数据类型
+            reduce_dtype=torch_dtype,  # 梯度通信数据类型
+            buffer_dtype=torch_dtype   # buffer 数据类型
+        )
+
+        # 配置 CPU 卸载（默认不卸载参数）
+        cpu_offload_policy = CPUOffload(offload_params=False)
+        # 可选：offload_params=True  # 按需启用参数卸载到 CPU
+
+        # 封装模型为 FSDP
+        logger.info("使用 FSDP 封装模型...")
+        model_to_train = FSDP(
             model,
             auto_wrap_policy=auto_wrap_policy,
             sharding_strategy=sharding_strategy,
-            mixed_precision=mixed_precision,
-            cpu_offload=cpu_offload,
-            device_id=local_rank if torch.cuda.is_available() else None,
+            mixed_precision=mixed_precision_policy,
+            cpu_offload=cpu_offload_policy,
+            device_id=torch.cuda.current_device() if torch.cuda.is_available() else None,
+            sync_module_states=True  # 确保所有进程的模型参数在初始化时同步
         )
-    model_to_train = model
+        logger.info("FSDP 模型封装完成。")
+        # ------------ FSDP 配置结束 ------------
+    else:
+        model_to_train = model
 
     optimizer = optim.AdamW(model_to_train.parameters(), lr=args.lr)
     criterion = nn.CrossEntropyLoss()
 
-    # 仅主进程创建目录并保存
-    if (not is_distributed) or rank == 0:
+    # 仅主进程创建目录
+    if not is_distributed or rank == 0:
         Path("checkpoints").mkdir(exist_ok=True)
         Path("models").mkdir(exist_ok=True)
 
@@ -319,20 +327,16 @@ def main():
     for epoch in range(args.epochs):
         model_to_train.train()
         if is_distributed:
-            # 每个 epoch 必须调用 sampler.set_epoch 以保证 shuffle 不同
             sampler.set_epoch(epoch)
 
         total_loss, num_batches = 0.0, 0
         batch_losses = []
 
         for batch_idx, (x, y) in enumerate(dataloader):
-            x = x.to(device, non_blocking=True)
-            y = y.to(device, non_blocking=True)
-
+            x, y = x.to(device, non_blocking=True), y.to(device, non_blocking=True)
+            optimizer.zero_grad()
             logits = model_to_train(x)
             loss = criterion(logits.view(-1, vocab_size), y.view(-1))
-
-            optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
@@ -341,37 +345,41 @@ def main():
             total_loss += loss_val
             num_batches += 1
 
-            # 仅主进程打印
-            if ((batch_idx + 1) % 50 == 0) and ((not is_distributed) or rank == 0):
+            if ((batch_idx + 1) % 50 == 0) and (not is_distributed or rank == 0):
                 avg_loss = sum(batch_losses[-50:]) / min(len(batch_losses), 50)
                 logger.info(f"Epoch {epoch+1}/{args.epochs}, Batch {batch_idx+1}, Avg Loss (last 50): {avg_loss:.4f}")
 
-        # epoch 结束，计算全局平均损失
-        local_avg_loss = total_loss / max(1, num_batches)
-        loss_tensor = torch.tensor(local_avg_loss, device=device)
-        if is_distributed:
-            dist.all_reduce(loss_tensor, op=dist.ReduceOp.AVG)
-        avg_loss = loss_tensor.item()
-
-        # 主进程打印并保存检查点
-        if (not is_distributed) or rank == 0:
+        # epoch 结束，主进程打印并保存检查点
+        avg_loss = total_loss / max(1, num_batches)
+        if not is_distributed or rank == 0:
             logger.info(f"Epoch {epoch+1}/{args.epochs}, Avg Loss: {avg_loss:.4f}")
-            # 如果使用 FSDP，保存 full state_dict
-            if is_distributed:
-                with FSDP.state_dict_type(model_to_train, StateDictType.FULL_STATE_DICT, FullStateDictConfig(offload_to_cpu=True, rank0_only=True)):
-                    state_dict = model_to_train.state_dict()
-            else:
-                state_dict = model_to_train.state_dict()
-            torch.save(state_dict, f"checkpoints/model_epoch_{epoch+1}.pth")
+
+        # 使用 torch.distributed.checkpoint.state_dict 保存完整模型状态（仅 rank 0）
+        # get_state_dict() 需要显式传递 optimizers 参数（即使为空），适配 PyTorch 2.4+
+        # StateDictOptions(full_state_dict=True) 确保生成完整状态字典，自动在 rank 0 收集并卸载到 CPU
+        if is_distributed:
+            model_state_dict, _ = get_state_dict(
+                model_to_train,
+                optimizers=(),  # 显式传递空优化器列表，仅保存模型状态
+                options=StateDictOptions(full_state_dict=True)
+            )
+            if rank == 0:
+                torch.save(model_state_dict, f"checkpoints/model_epoch_{epoch+1}.pth")
+        else:
+            torch.save(model_to_train.state_dict(), f"checkpoints/model_epoch_{epoch+1}.pth")
 
     # 最终模型保存（仅主进程）
-    if (not is_distributed) or rank == 0:
-        if is_distributed:
-            with FSDP.state_dict_type(model_to_train, StateDictType.FULL_STATE_DICT, FullStateDictConfig(offload_to_cpu=True, rank0_only=True)):
-                final_state = model_to_train.state_dict()
-        else:
-            final_state = model_to_train.state_dict()
-        torch.save(final_state, "models/final_model.pth")
+    if is_distributed:
+        model_state_dict, _ = get_state_dict(
+            model_to_train,
+            optimizers=(),  # 显式传递空优化器列表，仅保存模型状态
+            options=StateDictOptions(full_state_dict=True)
+        )
+        if rank == 0:
+            torch.save(model_state_dict, "models/final_model.pth")
+            logger.info("最终模型已保存至 models/final_model.pth")
+    else:
+        torch.save(model_to_train.state_dict(), "models/final_model.pth")
         logger.info("最终模型已保存至 models/final_model.pth")
 
     # 清理分布式环境
@@ -379,4 +387,4 @@ def main():
         cleanup_distributed()
 
 if __name__ == "__main__":
-    main()
+    main()  
