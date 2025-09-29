@@ -4,17 +4,17 @@
 支持单机/单GPU、单机/多GPU、以及多机多GPU（基于 torch.distributed）.
 
 使用示例（单机单GPU或CPU）:
-    python train_fsdp.py --epochs 3 --batch_size 16
+    python fsdp_gtp_wikitext2.py --epochs 3 --batch_size 16
 
 使用示例（多GPU/多机建议用 torchrun）:
     # 单机 2 GPU
-    torchrun --nproc_per_node=2 train_fsdp.py --epochs 3 --batch_size 8
+    torchrun --nproc_per_node=2 fsdp_gtp_wikitext2.py --epochs 3 --batch_size 8
 
     # 两台机器，每台 2 GPU（假设已经设置 MASTER_ADDR/MASTER_PORT 等）
     # export MASTER_ADDR="aihost1.magedu.com"
     # export MASTER_PORT=29500
-    torchrun --nnodes=2 --nproc_per_node=2 --node_rank=0 train_fsdp.py --epochs 3 --batch_size 8
-    torchrun --nnodes=2 --nproc_per_node=2 --node_rank=1 train_fsdp.py --epochs 3 --batch_size 8
+    torchrun --nnodes=2 --nproc_per_node=2 --node_rank=0 fsdp_gtp_wikitext2.py --epochs 3 --batch_size 8
+    torchrun --nnodes=2 --nproc_per_node=2 --node_rank=1 fsdp_gtp_wikitext2.py --epochs 3 --batch_size 8
 
 注意:
 - --batch_size 是“每个进程”的 batch size（即每张卡的 batch size）
