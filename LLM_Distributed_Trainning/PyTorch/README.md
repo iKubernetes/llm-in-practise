@@ -38,9 +38,23 @@ PyTorch Distributed 的典型用法涉及初始化、通信和清理。以下是
    - 使用 destroy_process_group() 清理资源，确保所有进程在超时内调用集体操作以避免挂起。
    - 重新初始化不支持或未测试，由于同步挑战，可能导致问题。
 
-## 示例中的目录说明
+### 示例中的目录说明
 
 - ddp_basics：DDP示例目录
 - fsdp_basics：FSDP示例目录
 - transformer_basics：GPT风格的Transformer架构模型的基础示例
 
+### 常用的环境变量
+
+```bash
+export NCCL_DEBUG=INFO   # 日志级别
+export NCCL_DEBUG_SUBSYS=ALL    # 打开日志的系统
+export NCCL_SOCKET_IFNAME=<可达网卡, e.g. eth0或ens3>     # 用于多机训练时负责进行分布式通信的网络接口
+export NCCL_IB_DISABLE=1     # 禁用InfiniBand网络
+```
+
+
+
+## 版权声明
+
+本文档由[马哥教育](http://www.magedu.com)开发，允许自由转载，但必须保留马哥教育及相关的一切标识。另外，商用需要征得马哥教育的书面同意。
