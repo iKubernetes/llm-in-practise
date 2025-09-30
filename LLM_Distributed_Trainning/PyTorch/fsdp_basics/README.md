@@ -1,8 +1,22 @@
 # PyTorch FSDP实践示例
 
+FSDP (Fully Sharded Data Parallelism，完全分片数据并行) 和 FSDP2 是 PyTorch 中用于训练超大模型的关键技术，它们通过将模型的参数 (Parameters)、梯度 (Gradients) 和 优化器状态 (Optimizer States) 分片（Sharding）到不同的 GPU 上，从而极大地减少了单个 GPU 的显存占用。
 
+- FSDP 是 PyTorch 中分布式训练的一个主要功能，其核心思想是模仿 DeepSpeed ZeRO-3 的分片策略。
 
+  - FlatParameter (扁平化参数)：这是FSDP1 的关键特性。它将一个 FSDP 模块（通常是模型的一个层或块）内所有的参数扁平化为一个巨大的 1D 连续张量 (FlatParameter)，然后对这个 1D 张量进行分片，分配给不同的 GPU。
+  - 动态 All-Gather：
+    - 在前向传播（Forward Pass）中，需要计算某一层时，每个 GPU 会通过 All-Gather 操作从其他 GPU 收集该层的全部参数（即 FlatParameter 的完整副本）。
+    - 计算完成后，这些完整的参数副本会被释放，从而节省显存。
+  - Reduce-Scatter：
+    - 在反向传播（Backward Pass）中，每个 GPU 计算出完整的梯度后，使用 Reduce-Scatter 操作来聚合（Reduce）和分散（Scatter）梯度。每个 GPU 最终只保存其对应参数分片的梯度分片。
+    - 这个过程确保了通信（All-Gather 和 Reduce-Scatter）可以与计算重叠，提高了训练效率。
 
+- FSDP2 是 FSDP 的改进版本，旨在解决 FSDP1 的局限性，提供更简洁的 API 和更灵活的内部机制。
+
+  - 核心优势：FSDP2 的主要突破在于引入了 DTensor (Distributed Tensor，分布式张量) 抽象层，并摒弃了 FlatParameter。
+
+  
 
 ## FSDP（fsdp1）实践示例
 
@@ -186,4 +200,4 @@ torchrun --nnodes=2 --nproc_per_node=1 --node_rank=1 --master_addr=172.25.0.100 
 
 ## 版权声明
 
-本文档由[马哥教育](http://www.magedu.com)开发，允许自由转载，但必须保留马哥教育及相关的一切标识。另外，商用需要征得马哥教育的书面同意。
+本项目及文档由[马哥教育](http://www.magedu.com)开发，允许自由转载，但必须保留马哥教育及相关的一切标识。另外，商用需要征得马哥教育的书面同意。
