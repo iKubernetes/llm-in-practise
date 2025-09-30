@@ -2,7 +2,11 @@
 
 
 
-## 单机训练
+
+
+## FSDP（fsdp1）实践示例
+
+### 单机训练
 
 **1. 安装依赖**：
 
@@ -32,7 +36,7 @@ torchrun --nproc_per_node=2 fsdp_gpt_wikitext2.py --epochs 5 --batch_size 32 --v
 
 
 
-## 多机训练
+### 多机训练
 
 **本示例中的主机环境：**
 
@@ -46,7 +50,7 @@ torchrun --nproc_per_node=2 fsdp_gpt_wikitext2.py --epochs 5 --batch_size 32 --v
 1. 多机训练时，必须要确保双方主机上的NCCL和CUDA版本一致，否则，极有可能导致通信或者训练异常。因此，在如下命令启动之前，请务必确保如下命令在各主机的结果相同：
 
    ```bash
-   python -c "import torch; print(torch.__version__); print(torch.version.cuda); print(torch.version.nccl)"
+   python -c "import torch; print(torch.__version__); print(torch.version.cuda);"
    ```
 
 2. 系统 CUDA 和 PyTorch 预编译 CUDA runtime 是两个独立的事物，前者主要用于让用户编译自己的 CUDA / C++ 代码，后者才是PyTorch 在运行时直接调用的库，它并不会依赖系统的 CUDA Toolkit。
@@ -75,7 +79,58 @@ torchrun --nnodes=2 --nproc_per_node=1 --node_rank=1 --master_addr=172.25.0.100 
 
 
 
-**故障排查技巧：**
+## FSDP2实践示例
+
+首先，验证fully_shard函数是否可用。
+
+```bash
+python -c "from torch.distributed.fsdp import fully_shard; print('fully_shard imported successfully')"
+```
+
+若是能够正常响应，则表示可以继续使用fsdp2。
+
+
+
+### 单机训练
+
+若要指定使用2个GPU，则使用如下命令。
+
+```bash
+torchrun --nproc_per_node=2 fsdp2_gpt_wikitext2.py
+```
+
+若要使用更多的自定义参数，可以参考如下命令。
+
+```bash
+torchrun --nproc_per_node=2 fsdp2_gpt_wikitext2.py --epochs 5 --batch_size 32 --vocab_size 5000
+```
+
+
+
+### 多机训练
+
+**本示例中的主机环境：**
+
+- 主机1：172.25.0.100，Ubuntu 2204，torch 2.8.0, cuda 12.8
+- 主机2：172.25.0.200，Ubuntu 2204，torch 2.8.0, cuda 12.8
+
+
+
+**主机1的启动命令：**
+
+```bash
+torchrun --nnodes=2 --nproc_per_node=1 --node_rank=0 --master_addr=172.25.0.100 --master_port=29500 fsdp2_gpt_wikitext2.py --epochs 3 --batch_size 8
+```
+
+**主机2的启动命令：**
+
+```bash
+torchrun --nnodes=2 --nproc_per_node=1 --node_rank=1 --master_addr=172.25.0.100 --master_port=29500 fsdp2_gpt_wikitext2.py --epochs 3 --batch_size 8
+```
+
+
+
+## 故障排查技巧
 
 1. 若主机的网络环境是TCP/IP而非InfiniBand，需要在各主机上显式禁止InfiniBand，命令如下：
 
@@ -126,10 +181,6 @@ torchrun --nnodes=2 --nproc_per_node=1 --node_rank=1 --master_addr=172.25.0.100 
    print("gpu count", torch.cuda.device_count())
    PY
    ```
-
-7. 
-
-
 
 
 
