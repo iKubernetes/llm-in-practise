@@ -53,6 +53,20 @@ export NCCL_SOCKET_IFNAME=<可达网卡, e.g. eth0或ens3>     # 用于多机训
 export NCCL_IB_DISABLE=1     # 禁用InfiniBand网络
 ```
 
+此外，更复杂的环境，可以使用更多的环境变量。
+
+```bash
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
+export CUDA_VISIBLE_DEVICES=0,2
+export TOKENIZERS_PARALLELISM=false
+export WANDB_DISABLED=1
+export NCCL_P2P_DISABLE=1
+export NCCL_IB_DISABLE=1
+#export NCCL_BLOCKING_WAIT=1  # 即将废弃，并由TORCH_NCCL_BLOCKING_WAIT替代
+export TORCH_NCCL_BLOCKING_WAIT=1
+export NCCL_DEBUG=INFO
+```
+
 
 
 ## 版权声明

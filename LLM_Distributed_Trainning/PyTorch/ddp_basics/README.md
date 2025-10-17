@@ -39,6 +39,21 @@ DDP 的训练流程涉及多个关键步骤，从环境初始化到最终的参�
 
 ## 单机训练
 
+**前提：环境设置**
+
+设置必要的环境变量，例如非InfiniBand环境，请务必要显式禁用它。
+
+```bash
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
+export CUDA_VISIBLE_DEVICES=0,2
+export TOKENIZERS_PARALLELISM=false
+export WANDB_DISABLED=1
+export NCCL_P2P_DISABLE=1
+export NCCL_IB_DISABLE=1
+export TORCH_NCCL_BLOCKING_WAIT=1
+export NCCL_DEBUG=INFO
+```
+
 **1. 安装依赖**：
 
 ```bash
