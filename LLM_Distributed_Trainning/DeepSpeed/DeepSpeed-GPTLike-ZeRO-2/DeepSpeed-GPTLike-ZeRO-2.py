@@ -174,7 +174,7 @@ def main():
     parser.add_argument("--n_head", type=int, default=12, help="注意力头数")
     parser.add_argument("--d_model", type=int, default=768, help="模型维度")
     parser.add_argument("--dropout", type=float, default=0.1, help="Dropout 比率")
-    parser.add_argument("--ds_config", type=str, default="ds_config_stage2.json", help="DeepSpeed 配置文件路径")
+    parser.add_argument("--ds_config", type=str, default="ds_config.json", help="DeepSpeed 配置文件路径")
     parser.add_argument("--local_rank", type=int, default=0, help="由 DeepSpeed launcher 自动传入")
     args = parser.parse_args()
 
