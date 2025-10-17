@@ -52,6 +52,7 @@ export NCCL_P2P_DISABLE=1
 export NCCL_IB_DISABLE=1
 export TORCH_NCCL_BLOCKING_WAIT=1
 export NCCL_DEBUG=INFO
+export PYTORCH_NO_IPV6=1    # 禁用IPV6，若有必要
 ```
 
 **1. 安装依赖**：
