@@ -82,15 +82,13 @@ export NCCL_DEBUG=INFO
 
 ## 启动训练
 
-
-
 ### 单机单卡训练
 
 以前一节提到的多GPU主机环境为例，若要进行单机单GPU训练，可直接指定要使用的GPU，而后启动训练过程。例如下面的命令，表示在GPU 0启动训练。
 
 ```bash
 export CUDA_VISIBLE_DEVICES=0
-python trainer_demo.py
+python trainer_evaluate_demo.py
 ```
 
 Trainer会检测到单张 GPU，自动使用单卡模式训练（无任何DDP启动逻辑）。
@@ -99,11 +97,42 @@ Trainer会检测到单张 GPU，自动使用单卡模式训练（无任何DDP启
 
 ### 单机多卡训练
 
-若要让两张RTX 3090 一起参与训练（例如前一节示例环境中的GPU 0 和 GPU 2），则不能再通过“python trainer_demo.py”命令进行，而是要改为使用PyTorch的分布式启动器torchrun命令进行。例如下面的命令，表示在GPU 0和GPU 2上进行分布式训练。
+#### 单机多卡训练（accelerate）
+
+若要让两张RTX 3090 一起参与训练（例如前一节示例环境中的GPU 0 和 GPU 2），则不能再通过“python trainer_demo.py”命令进行，而是要改为使用accelerate launch命令进行。在使用accelerate config命令配置好训练环境后，即可使用如下命令启动分布式训练。
+
+```bash
+accelerate launch trainer_evaluate_demo.py
+```
+
+也可以使用命令选项指定使用多GPU训练，并指定要使用的进程数，例如“--multi_gpu --num_processes 2”。
+
+#### 单机多卡训练(torchrun)
+
+另外，多机多卡训练也可以使用PyTorch的分布式启动器torchrun命令进行。例如下面的命令，表示在GPU 0和GPU 2上进行分布式训练。
 
 ```bash
 export CUDA_VISIBLE_DEVICES=0,2
-torchrun --nproc_per_node=2 trainer_demo.py
+torchrun --nproc_per_node=2 trainer_evaluate_demo.py
 ```
 
 命令行选项“--nproc_per_node=2” 表示每张显卡启动一个进程，Trainer会自动检测并进入分布式模式。
+
+
+
+### 多机多卡训练
+
+使用accelerate launch命令的启动方法如下。
+
+Master主机：
+
+```bash
+accelerate launch --main_process_ip "MASTER_IP" --main_process_port 29500 --num_processes 8 --num_machines 2 --machine_rank 0 trainer_evaluate_demo.py
+```
+
+其它主机（例如主机B）：
+
+```bash
+accelerate launch --main_process_ip "MASTER_IP" --main_process_port 29500 --num_processes 8 --num_machines 2 --machine_rank 1 trainer_evaluate_demo.py
+```
+
