@@ -9,15 +9,26 @@
 pip install torch transformers peft datasets accelerate evaluate bitsandbytes deepspeed
 ```
 
+
+
 **2. 环境说明：**
 
-操作系统：Ubuntu 2204 Server
+**主机1：**
 
-GPU：2 x RTX 3090 24G
+- 操作系统：Ubuntu 2204 Server
 
-示例数据集：自我认知数据集“modelscope/self-cognition”
+- GPU：2 x RTX 3090 24G
 
-模型：Qwen3-8B、Qwen3-14B、DeepSeek-R1-0528-Qwen3-8B、DeepSeek-R1-Distill-Qwen-14B
+**主机2：**
+
+- 操作系统：Ubuntu 2404 Server
+- GPU: 1 x RTX 4090D 48G
+
+
+
+**示例数据集：**自我认知数据集“modelscope/self-cognition”
+
+**模型：**Qwen3-8B、Qwen3-14B、DeepSeek-R1-0528-Qwen3-8B、DeepSeek-R1-Distill-Qwen-14B
 
 各程序组件的版本：
 
@@ -29,6 +40,8 @@ GPU：2 x RTX 3090 24G
       deepspeed: 0.18.0
        evaluate: 0.4.6
    bitsandbytes: 0.48.1
+          numpy: 2.3.4
+           peft: 0.17.1
 ```
 
 
@@ -154,7 +167,7 @@ torchrun --nproc_per_node=2 qwen3-8b-lora-dist.py
 
 
 
-#### 单机单GPU微调
+#### 单机单GPU微调训练
 
 单机单GPU微调启动命令：
 
@@ -181,7 +194,6 @@ python qwen3-inferences.py
 
 ```text
 ============== 开始测试 ==============
-
 [问题 1] 你是？
 [回答 1] <think>
 好的，用户问“你是？”，我需要以马哥教育AI小助手的身份回答。首先，我要确认自己的身份，说明我是由马哥教育AI团队训练的智能助手。.....。
@@ -197,13 +209,12 @@ python qwen3-inferences.py
 我是马哥教育AI小助手，由马哥教育AI团队训练，专注于为学习者和从业者提供精准、高效的技术支持。  
 我擅长解答编程、运维、云计算等领域的技术问题，并能分享学习资源和实用技巧。  
 我的目标
-
 ============== 测试结束 ==============
 ```
 
 
 
-#### 单机多GPU微调
+#### 单机多GPU微调训练
 
 本示例用于微调测试14B的Qwen3模型，因为量化加载原模型，可以节约相当的显存资源。
 
@@ -229,6 +240,66 @@ torchrun --nproc_per_node=2 qwen3-14b-qlora-dist.py
 accelerate launch --num_processes 2  qwen3-14b-qlora-dist-deepspeed.py
 或者
 torchrun --nproc_per_node=2  qwen3-14b-qlora-dist-deepspeed.py
+```
+
+
+
+#### 多机多GPU微调训练
+
+本示例以qwen3-8b-qlora-dist.py脚本为例。
+
+
+
+1. 在各主机上声明环境变量，配置跨主机的颁式通信环境：
+
+```bash
+export TOKENIZERS_PARALLELISM=false
+export WANDB_DISABLED=1
+export NCCL_P2P_DISABLE=1
+export NCCL_IB_DISABLE=1    # 对于非Infiniband网络来说，必须
+export TORCH_NCCL_BLOCKING_WAIT=1
+export NCCL_DEBUG=INFO
+export PYTORCH_NO_IPV6=1    # 禁用IPV6，若有必要
+export NCCL_SOCKET_IFNAME=eth0   # 将eth0替换为实际要使用的接口名称，可选，按实际情况配置
+```
+
+
+
+2. 手动准备专用配置文件（multi_hosts.yaml）：
+
+```yaml
+compute_environment: LOCAL_MACHINE
+distributed_type: MULTI_GPU
+machine_rank: 0                # 每台机器需要修改此值
+num_machines: 2                # 总机器数
+num_processes: 2               # 总GPU数 (例如2台机器 * 每台1卡)
+main_process_ip: 172.25.0.100  # 主节点的IP
+main_process_port: 29500       # 可用的端口
+mixed_precision: fp16          # 可选，使用混合精度训练
+```
+
+
+
+3. 主机1（Master）上要运行的命令：
+
+```bash
+accelerate launch --config_file multi_hosts.yaml \
+    --main_process_ip 172.25.0.100 \
+    --main_process_port 29500 \
+    --machine_rank 0 \
+    qwen3-8b-qlora-dist.py
+```
+
+
+
+4. 主机2（Work）上要运行的命令：
+
+```bash
+accelerate launch --config_file multi_hosts.yaml \
+    --main_process_ip 172.25.0.200 \
+    --main_process_port 29500 \
+    --machine_rank 1 \
+    qwen3-8b-qlora-dist.py
 ```
 
 
