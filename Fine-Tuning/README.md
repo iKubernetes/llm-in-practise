@@ -26,9 +26,9 @@ pip install torch transformers peft datasets accelerate evaluate bitsandbytes de
 
 
 
-**示例数据集：**自我认知数据集“modelscope/self-cognition”
+**示例数据集：** 自我认知数据集“modelscope/self-cognition”
 
-**模型：**Qwen3-8B、Qwen3-14B、DeepSeek-R1-0528-Qwen3-8B、DeepSeek-R1-Distill-Qwen-14B
+**模型：** Qwen3-8B、Qwen3-14B、DeepSeek-R1-0528-Qwen3-8B、DeepSeek-R1-Distill-Qwen-14B
 
 各程序组件的版本：
 
@@ -275,6 +275,15 @@ main_process_ip: 172.25.0.100  # 主节点的IP
 main_process_port: 29500       # 可用的端口
 mixed_precision: fp16          # 可选，使用混合精度训练
 ```
+
+各参数的说明：
+
+- compute_environment（计算环境）：一般为LOCAL_MACHINE；
+- distributed_type（分布式类型）：分布式环境通常为MULTI_GPU，若计划使用 DeepSpeed，则为DEEPSPEED； 
+- machine_rank（机器排名）：为集群中的每台机器分配一个唯一的序号，例如 0、1、2...，主服务器通常为 0； 
+- num_machines（机器数量）：计划使用的机器总数量； 
+- num_processes（进程总数）：所有机器上GPU的总数，例如，2台机器，每台4卡，则填写8；
+- main_process_ip（主进程IP）和 main_process_port（主进程端口）：填写主服务器（rank 0）的IP地址和一个可用的端口号，所有机器都需要能访问到这个地址和端口；
 
 
 
