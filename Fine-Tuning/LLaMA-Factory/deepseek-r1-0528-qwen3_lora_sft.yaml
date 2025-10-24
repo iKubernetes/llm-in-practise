@@ -1,0 +1,32 @@
+### model
+#model_name_or_path: deepseek-ai/DeepSeek-R1-0528-Qwen3-8B  # 请修改为模型实际路径
+model_name_or_path: /home/marion/Pretrained_Models/DeepSeek-R1-0528-Qwen3-8B  # 请修改为模型实际路径
+template: qwen3  # 使用qwen3模板
+
+### method
+stage: sft
+do_train: true
+finetuning_type: lora  # 使用LoRA进行高效微调
+lora_target: all  # LoRA作用于所有线性层
+
+### dataset
+dataset: self_cognition_magedu
+  - self_cognition_alpaca  # 这里填写在dataset_info.json中注册的数据集名称，将使用其所有样本
+  - alpaca_zh_demo         # 联合的通用指令数据集
+cutoff_len: 2048
+overwrite_cache: true
+
+### output
+output_dir: finetuned/deepseek-r1-mage-sft  # 训练输出目录
+logging_steps: 10
+save_steps: 500
+plot_loss: true
+
+### train
+per_device_train_batch_size: 1  # 根据GPU显存调整
+gradient_accumulation_steps: 8  # 通过累积梯度来增大有效批次大小
+learning_rate: 1.0e-4  # 学习率，LoRA微调常用1e-4
+num_train_epochs: 3.0  # 训练轮数
+lr_scheduler_type: cosine
+bf16: true  # 如果GPU支持BF16精度
+# fp16: true  # 如果GPU不支持BF16，可启用FP16
