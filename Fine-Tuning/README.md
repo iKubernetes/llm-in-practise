@@ -248,8 +248,6 @@ torchrun --nproc_per_node=2  qwen3-14b-qlora-dist-deepspeed.py
 
 本示例以qwen3-8b-qlora-dist.py脚本为例。
 
-
-
 1. 在各主机上声明环境变量，配置跨主机的颁式通信环境：
 
 ```bash
@@ -301,6 +299,10 @@ accelerate launch --config_file multi_hosts.yaml \
     --machine_rank 1 \
     qwen3-8b-qlora-dist.py
 ```
+
+
+
+注意：运行结束后，仅Master主机会保存训练结果。
 
 
 
