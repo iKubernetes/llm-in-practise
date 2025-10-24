@@ -132,7 +132,7 @@ if local_rank == 0:
     model.print_trainable_parameters()
 
 # ==================== 训练配置 ====================
-output_dir = "./finetuned/deepseek-r1-0528-qlora-dist"
+output_dir = "./finetuned/deepseek-r1-0528-qwen3-8b-qlora-dist"
 
 training_args = TrainingArguments(
     output_dir=output_dir,
