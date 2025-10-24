@@ -1,0 +1,9 @@
+<|im_start|>system
+{{ system_message }}
+<|im_end|>
+{% for message in messages %}
+<|im_start|>{{ message['role'] }}
+{{ message['content'] }}
+<|im_end|>
+{% endfor %}
+<|im_start|>assistant
