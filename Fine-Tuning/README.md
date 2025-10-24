@@ -337,6 +337,53 @@ torchrun --nproc_per_node=2 deepseek-r1-qwen3-0528-8b-qlora.dist.py
 
 
 
+### vLLM推理引擎加载微调模型
+
+本示例假设有两个RTX 3090 GPU可用，且在PCI总线上的ID分别为0和2。
+
+```bash
+CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=0,2 \
+	vllm serve /home/marion/Pretrained_Models/Qwen3-8B/   --enable-lora Qwen3-8B \
+	--enable-lora --lora-modules mageedu-lora=./finetuned/qwen3-8b-lora/ 
+	--tensor-parallel-size 2 --gpu-memory-utilization 0.85
+```
+
+其中，--enable-lora选项表示激活 LoRA 功能，--lora-modules用于指定要加载的 LoRA 适配器，我们可以通过空格分隔，同时加载多个适配器，格式为“适配器名称1 适配器路径1 适配器名称2 适配器路径2 ...”。
+
+若需要vLLM启动时加载要使用ChatML模板，则可以使用类似如下命令：
+
+```bash
+CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=0,2 \
+	vllm serve /home/marion/Pretrained_Models/Qwen3-8B/   --enable-lora Qwen3-8B \
+	--enable-lora --lora-modules mageedu-lora=./finetuned/qwen3-8b-lora/ 
+	--chat-template ./templates/chatml_template.jinja
+	--tensor-parallel-size 2 --gpu-memory-utilization 0.85
+```
+
+此时，可以使用类似如下命令，对加载的LoRA适配器模型发起请示来验证。
+
+```bash
+curl http://localhost:8000/v1/chat/completions   -H "Content-Type: application/json"   -H "Authorization: Bearer dummy-key"   -d '{
+    "model": "mageedu-lora",
+    "messages": [
+      {"role": "system", "content": "你是马哥教育AI小助手"},
+      {"role": "user", "content": "请用三句话介绍你自己"}
+    ]
+  }'
+```
+
+若使用的是Open WebUI，只需要在其“设置-->通用-->系统提示词”的文本框架中填入“你是马哥教育AI小助手”即可。
+
+![set_system_prompt](./images/set_system_prompt.png)
+
+此时，选中微调好的适配器对应的模型，即可看到聊天效果。
+
+![chat](./images/chat.png)
+
+
+
+
+
 ## 版权声明
 
 本文档及项目由[马哥教育](http://www.magedu.com)开发，允许自由转载，但必须保留马哥教育及相关的一切标识。另外，商用需要征得马哥教育的书面同意。
