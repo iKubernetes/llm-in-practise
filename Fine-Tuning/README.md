@@ -303,7 +303,7 @@ accelerate launch --config_file multi_hosts.yaml \
 
 ```bash
 accelerate launch --config_file multi_hosts.yaml \
-    --main_process_ip 172.25.0.200 \
+    --main_process_ip 172.25.0.100 \
     --main_process_port 29500 \
     --machine_rank 1 \
     qwen3-8b-qlora-dist.py
