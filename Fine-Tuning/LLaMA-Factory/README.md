@@ -215,7 +215,8 @@ llamafactory-cli train \
 训练完成后，可以使用LLaMA-Factory的Web界面或命令行与微调后的模型对话，验证其自我认知是否已更新。例如下面的命令可以启动Web UI（注意按实际情况替换其中的模型ID/本地模型路径，以及LoRA/QLoRA适配器的路径）：
 
 ```bash
-llamafactory-cli webchat --model_name_or_path /home/marion/Pretrained_Models/DeepSeek-R1-0528-Qwen3-8B --adapter_name_or_path ./finetuned/Deepseek-R1-0528-Qwen3-MageduAI --template deepseekr1
+llamafactory-cli webchat --model_name_or_path /home/marion/Pretrained_Models/DeepSeek-R1-0528-Qwen3-8B \
+               --adapter_name_or_path ./finetuned/Deepseek-R1-0528-Qwen3-MageduAI --template deepseekr1
 ```
 
 在对话框中询问“你是谁？”，模型应该回答它是“马哥教育AI小助手”。
