@@ -106,7 +106,7 @@ cutoff_len: 2048
 overwrite_cache: true
 
 ### output
-output_dir: finetuned/deepseek-r1-magedu-sft  # 训练输出目录
+output_dir: finetuned/Deepseek-R1-0528-Qwen3-MageduAI  # 训练输出目录
 logging_steps: 10
 save_steps: 500
 plot_loss: true
@@ -152,8 +152,6 @@ llamafactory-cli train examples/my_config_dir/deepseek-r1-0528_mage_sft.yaml
 
 ### 验证与导出模型
 
-
-
 #### 模型测试
 
 训练完成后，可以使用LLaMA-Factory的Web界面或命令行与微调后的模型对话，验证其自我认知是否已更新。例如下面的命令可以启动Web UI：
@@ -162,7 +160,13 @@ llamafactory-cli train examples/my_config_dir/deepseek-r1-0528_mage_sft.yaml
 llamafactory-cli webchat --model_name_or_path /home/marion/Pretrained_Models/DeepSeek-R1-0528-Qwen3-8B --adapter_name_or_path finetuned/deepseek-r1-mage-sft --template qwen3
 ```
 
-在对话框中询问“你是谁？”，模型应该回答它是“马哥教育AI小助手”。
+在对话框中询问“你是谁？”，模型应该回答它是“马哥教育AI小助手”。若模型回答有问题，可以考虑使用推理脚本进行测试，具体的命令如下（注意修改脚本中的模型ID或路径，以及LoRA/QLoRA适配器的路径）：
+
+```bash
+python inferences.py
+```
+
+
 
 #### 模型导出（可选）
 
@@ -171,8 +175,8 @@ llamafactory-cli webchat --model_name_or_path /home/marion/Pretrained_Models/Dee
 ```bash
 llamafactory-cli export \
     --model_name_or_path /home/marion/Pretrained_Models/DeepSeek-R1-0528-Qwen3-8B \
-    --adapter_name_or_path saves/deepseek-r1-mage-sft \
+    --adapter_name_or_path ./finetuned/Deepseek-R1-0528-Qwen3-MageduAI \
     --template qwen3 \
-    --export_dir /path/to/your/merged_deepseek_r1_mage
+    --export_dir ./merged/Deepseek-R1-0528-Qwen3-MageduAI
 ```
 
