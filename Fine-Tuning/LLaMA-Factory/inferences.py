@@ -2,12 +2,14 @@ import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from peft import PeftModel
 
-# ==================== 路径设置 ====================
-# LoRA或QLoRA微调输出路径
-base_model_path = "deepseek-ai/DeepSeek-R1-0528-Qwen3-8B"  # 注意要修改为实际的模型id
-lora_model_path = "./finetuned/qwen3-8b-lora"   # 注意要修改为实际的LoRA适配器保存路径
+# 1. 路径设置
+# 模型ID或本地保存的模型路径
+# base_model_path = "deepseek-ai/DeepSeek-R1-0528-Qwen3-8B" 
+base_model_path = "/home/marion/Pretrained_Models/DeepSeek-R1-0528-Qwen3-8B" 
+# LoRA/QLoRA微调输出路径
+lora_model_path = "./finetuned/Deepseek-R1-0528-Qwen3-MageduAI"
 
-# ==================== 模型加载 ====================
+# 2. 模型加载 
 print("正在加载Tokenizer与LoRA/QLoRA权重...")
 tokenizer = AutoTokenizer.from_pretrained(base_model_path)
 tokenizer.pad_token = tokenizer.eos_token
@@ -23,7 +25,7 @@ base_model = AutoModelForCausalLM.from_pretrained(
 model = PeftModel.from_pretrained(base_model, lora_model_path)
 model.eval()
 
-# ==================== 生成函数 ====================
+# 3. 生成函数
 def chat(query, history=None, system_prompt=None, max_new_tokens=256):
     """
     构建ChatML格式输入并推理输出。
@@ -59,19 +61,19 @@ def chat(query, history=None, system_prompt=None, max_new_tokens=256):
     return response.strip()
 
 
-# ==================== 系统提示词 ====================
+# 4. 系统提示词
 system_prompt = (
     "你是一个有帮助的智能助手，由马哥教育AI团队训练，名为马哥教育AI小助手，旨在提供准确且友好的回答。"
 )
 
-# ==================== 测试问题 ====================
+# 5. 测试问题
 questions = [
     "你是？",
     "请用三句话介绍你自己。"
 ]
 
-# ==================== 执行推理 ====================
-print("\n============== 开始测试 ==============\n")
+# 6. 执行推理
+print("\n============== 开始测试(MageEdu AI助手) ==============\n")
 history = []
 for i, q in enumerate(questions, 1):
     print(f"[问题 {i}] {q}")
@@ -80,5 +82,5 @@ for i, q in enumerate(questions, 1):
     history.append({"role": "user", "content": q})
     history.append({"role": "assistant", "content": answer})
 
-print("============== 测试结束 ==============")
+print("============== 测试结束(MageEdu AI助手) ==============")
 

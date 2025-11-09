@@ -17,7 +17,7 @@ cutoff_len: 2048
 overwrite_cache: true
 
 ### output
-output_dir: finetuned/deepseek-r1-mage-sft  # 训练输出目录
+output_dir: finetuned/Deepseek-R1-0528-Qwen3-MageduAI  # 训练输出目录
 logging_steps: 10
 save_steps: 500
 plot_loss: true
