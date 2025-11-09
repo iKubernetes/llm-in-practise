@@ -13,9 +13,9 @@
 - 框架：LLaMA-Factory（统一多模型、模板化数据微调框架）
 
 
-### 准备工作
+## 准备工作
 
-#### 安装环境
+### 安装环境
 
 首先，克隆 LLaMA-Factory 并安装依赖。建议使用Python 3.10及以上的版本，CUDA使用11.8及以上版本。
 
@@ -25,7 +25,16 @@ cd LLaMA-Factory
 pip install -e ".[torch,metrics,deepspeed]"
 ```
 
-#### 准备模型
+确认训练可用的GPU设备（如有需要）。
+
+```bash
+export CUDA_DEVICE_ORDER=PCI_BUS_ID 
+export CUDA_VISIBLE_DEVICES=0,2
+```
+
+
+
+### 准备模型
 
 接着，下载模型到本地目录。我们可以从Hugging Face或ModelScope下载deepseek-ai/DeepSeek-R1-0528-Qwen3-8B模型。若要从ModelScope下载，一般要先设置环境变量，接着使用git进行克隆（要事先安装git-lfs）：
 
@@ -36,7 +45,7 @@ cd /home/marion/Pretrained_Models/
 git clone https://www.modelscope.cn/deepseek-ai/DeepSeek-R1-0528-Qwen3-8B.git
 ```
 
-#### 准备数据集
+### 准备数据集
 
 "modelscope/self-cognition"是一个自我认知数据集，用于教导模型“你是谁”。我们需要先修改其中的模型名称和作者信息。
 
@@ -77,9 +86,9 @@ python convert_self_cognition_to_alpaca.py
 }
 ```
 
-### 配置执行微调
+## 配置执行微调
 
-
+### 方法一：基于配置文件进行
 
 #### 配置训练参数
 
@@ -95,13 +104,17 @@ template: deepseekr1  # 使用deepseekr1模板
 stage: sft
 do_train: true
 finetuning_type: lora  # 使用LoRA进行高效微调
-lora_target: all  # LoRA作用于所有线性层
+lora_target: all  # LoRA作用于所有线性层，可用值k_proj,v_proj,q_proj,o_proj,up_proj,gate_proj,down_proj
+
+### 若要使用QLoRA，请启用如下两项
+#top.quantization_bit: '4'
+#top.quantization_method: bnb
 
 ### dataset
 dataset: 
   - self_cognition_magedu  # 这里填写在dataset_info.json中注册的数据集名称，将使用其所有样本
-  #- alpaca_zh_demo#200     # 联合的通用指令数据集
-  #- sharegpt  # 添加多轮对话数据增加多样性
+  #- alpaca_zh_demo     # 联合的通用指令数据集
+  #- sharegpt4  # 添加多轮对话数据增加多样性
 cutoff_len: 2048
 overwrite_cache: true
 
@@ -118,6 +131,9 @@ learning_rate: 1.0e-4  # 学习率，LoRA微调常用1e-4
 num_train_epochs: 3.0  # 训练轮数
 lr_scheduler_type: cosine
 bf16: true  # 如果你的GPU支持BF16精度
+rope_scaling: yarn
+max_samples: '600'
+# use_dora: false    # 若要启用DoRA，可启用该选项
 # fp16: true  # 如果GPU不支持BF16，可启用FP16
 ```
 
@@ -148,19 +164,67 @@ bf16: true  # 如果你的GPU支持BF16精度
 llamafactory-cli train examples/my_config_dir/deepseek-r1-0528_mage_sft.yaml
 ```
 
+### 方法二：基于命令行参数进行
 
+下面是一个QLoRA微调的示例。运行之前，需要确认安装了bitsandbytes库。
 
-### 验证与导出模型
+```bash
+llamafactory-cli train \
+    --stage sft \
+    --do_train True \
+    --model_name_or_path /home/marion/Pretrained_Models/DeepSeek-R1-0528-Qwen3-8B \
+    --preprocessing_num_workers 16 \
+    --finetuning_type lora \
+    --template deepseekr1 \
+    --rope_scaling yarn \
+    --flash_attn auto \
+    --dataset_dir data \
+    --dataset self_cognition_magedu,sharegpt4 \
+    --max-samples 200 \
+    --cutoff_len 2048 \
+    --learning_rate 5e-05 \
+    --num_train_epochs 3.0 \
+    --per_device_train_batch_size 1 \
+    --gradient_accumulation_steps 8 \
+    --lr_scheduler_type cosine \
+    --max_grad_norm 1.0 \
+    --logging_steps 5 \
+    --save_steps 100 \
+    --packing False \
+    --enable_thinking True \
+    --report_to none \
+    --output_dir ./finetuned/Deepseek-R1-0528-Qwen3-MageduAI-QLoRA \
+    --bf16 True \
+    --trust_remote_code True \
+    --optim adamw_torch \
+    --quantization_bit 4 \
+    --quantization_method bnb \
+    --double_quantization True \
+    --lora_rank 8 \
+    --lora_alpha 16 \
+    --lora_dropout 0 \
+    --lora_target all
+```
+
+训练完成后，可以使用webchat或者推理脚本进行测试。
+
+### 验证微调效果
 
 #### 模型测试
 
-训练完成后，可以使用LLaMA-Factory的Web界面或命令行与微调后的模型对话，验证其自我认知是否已更新。例如下面的命令可以启动Web UI：
+训练完成后，可以使用LLaMA-Factory的Web界面或命令行与微调后的模型对话，验证其自我认知是否已更新。例如下面的命令可以启动Web UI（注意按实际情况替换其中的LoRA/QLoRA适配器的路径）：
 
 ```bash
 llamafactory-cli webchat --model_name_or_path /home/marion/Pretrained_Models/DeepSeek-R1-0528-Qwen3-8B --adapter_name_or_path ./finetuned/Deepseek-R1-0528-Qwen3-MageduAI --template deepseekr1
 ```
 
-在对话框中询问“你是谁？”，模型应该回答它是“马哥教育AI小助手”。若模型回答有问题，可以考虑使用推理脚本进行测试，具体的命令如下（注意修改脚本中的模型ID或路径，以及LoRA/QLoRA适配器的路径）：
+在对话框中询问“你是谁？”，模型应该回答它是“马哥教育AI小助手”。
+
+![webchat](./images/webchat.png)
+
+
+
+我们也可以使用推理脚本进行测试，具体的命令如下（注意修改脚本中的模型ID或路径，以及LoRA/QLoRA适配器的路径）：
 
 ```bash
 python inferences.py
@@ -168,7 +232,7 @@ python inferences.py
 
 
 
-#### 模型导出（可选）
+### 模型导出（可选）
 
 如果要将LoRA适配器权重与基础模型合并成一个完整的模型文件以便部署，可以使用导出命令：
 
