@@ -89,7 +89,7 @@ LLaMA-Factory中通常使用YAML配置文件来设置训练参数，配置时可
 ### model
 #model_name_or_path: deepseek-ai/DeepSeek-R1-0528-Qwen3-8B  # 请修改为模型实际路径
 model_name_or_path: /home/marion/Pretrained_Models/DeepSeek-R1-0528-Qwen3-8B  # 请修改为模型实际路径
-template: qwen3  # 使用qwen3模板
+template: deepseekr1  # 使用deepseekr1模板
 
 ### method
 stage: sft
@@ -157,7 +157,7 @@ llamafactory-cli train examples/my_config_dir/deepseek-r1-0528_mage_sft.yaml
 训练完成后，可以使用LLaMA-Factory的Web界面或命令行与微调后的模型对话，验证其自我认知是否已更新。例如下面的命令可以启动Web UI：
 
 ```bash
-llamafactory-cli webchat --model_name_or_path /home/marion/Pretrained_Models/DeepSeek-R1-0528-Qwen3-8B --adapter_name_or_path ./finetuned/Deepseek-R1-0528-Qwen3-MageduAI --template qwen3
+llamafactory-cli webchat --model_name_or_path /home/marion/Pretrained_Models/DeepSeek-R1-0528-Qwen3-8B --adapter_name_or_path ./finetuned/Deepseek-R1-0528-Qwen3-MageduAI --template deepseekr1
 ```
 
 在对话框中询问“你是谁？”，模型应该回答它是“马哥教育AI小助手”。若模型回答有问题，可以考虑使用推理脚本进行测试，具体的命令如下（注意修改脚本中的模型ID或路径，以及LoRA/QLoRA适配器的路径）：
@@ -176,7 +176,7 @@ python inferences.py
 llamafactory-cli export \
     --model_name_or_path /home/marion/Pretrained_Models/DeepSeek-R1-0528-Qwen3-8B \
     --adapter_name_or_path ./finetuned/Deepseek-R1-0528-Qwen3-MageduAI \
-    --template qwen3 \
+    --template  deepseekr1 \
     --export_dir ./merged/Deepseek-R1-0528-Qwen3-MageduAI
 ```
 

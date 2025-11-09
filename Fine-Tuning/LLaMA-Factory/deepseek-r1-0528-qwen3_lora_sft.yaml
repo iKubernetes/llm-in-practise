@@ -1,7 +1,7 @@
 ### model
 #model_name_or_path: deepseek-ai/DeepSeek-R1-0528-Qwen3-8B  # 请修改为模型实际路径
 model_name_or_path: /home/marion/Pretrained_Models/DeepSeek-R1-0528-Qwen3-8B  # 请修改为模型实际路径
-template: qwen3  # 使用qwen3模板
+template: deepseekr1  # 使用deepseekr1模板
 
 ### method
 stage: sft
