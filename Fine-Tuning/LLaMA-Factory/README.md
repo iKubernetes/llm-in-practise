@@ -166,7 +166,7 @@ llamafactory-cli train examples/my_config_dir/deepseek-r1-0528_mage_sft.yaml
 
 ### 方法二：基于命令行参数进行
 
-下面是一个QLoRA微调的示例。运行之前，需要确认安装了bitsandbytes库。
+下面是一个QLoRA微调的示例，注意按实际情况替换命令中的模型ID/本地模型路径，以及LoRA/QLoRA适配器的路径。运行之前，需要确认安装了bitsandbytes库。
 
 ```bash
 llamafactory-cli train \
@@ -212,7 +212,7 @@ llamafactory-cli train \
 
 #### 模型测试
 
-训练完成后，可以使用LLaMA-Factory的Web界面或命令行与微调后的模型对话，验证其自我认知是否已更新。例如下面的命令可以启动Web UI（注意按实际情况替换其中的LoRA/QLoRA适配器的路径）：
+训练完成后，可以使用LLaMA-Factory的Web界面或命令行与微调后的模型对话，验证其自我认知是否已更新。例如下面的命令可以启动Web UI（注意按实际情况替换其中的模型ID/本地模型路径，以及LoRA/QLoRA适配器的路径）：
 
 ```bash
 llamafactory-cli webchat --model_name_or_path /home/marion/Pretrained_Models/DeepSeek-R1-0528-Qwen3-8B --adapter_name_or_path ./finetuned/Deepseek-R1-0528-Qwen3-MageduAI --template deepseekr1
@@ -234,13 +234,18 @@ python inferences.py
 
 ### 模型导出（可选）
 
-如果要将LoRA适配器权重与基础模型合并成一个完整的模型文件以便部署，可以使用导出命令：
+如果要将LoRA适配器权重与基础模型合并成一个完整的模型文件以便部署，可以使用导出命令（注意按实际情况替换其中的模型ID/本地模型路径，以及LoRA/QLoRA适配器的路径）：
 
 ```bash
 llamafactory-cli export \
     --model_name_or_path /home/marion/Pretrained_Models/DeepSeek-R1-0528-Qwen3-8B \
-    --adapter_name_or_path ./finetuned/Deepseek-R1-0528-Qwen3-MageduAI \
+    --adapter_name_or_path ./finetuned/Deepseek-R1-0528-Qwen3-MageduAI-QLoRA \
     --template  deepseekr1 \
     --export_dir ./merged/Deepseek-R1-0528-Qwen3-MageduAI
 ```
 
+
+
+## 版权声明
+
+本文档及项目由[马哥教育](http://www.magedu.com)开发，允许自由转载，但必须保留马哥教育及相关的一切标识。另外，商用需要征得马哥教育的书面同意。
