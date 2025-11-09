@@ -98,15 +98,15 @@ finetuning_type: lora  # 使用LoRA进行高效微调
 lora_target: all  # LoRA作用于所有线性层
 
 ### dataset
-dataset: self_cognition_magedu  # 
-  - self_cognition_alpaca  # 这里填写在dataset_info.json中注册的数据集名称，将使用其所有样本
+dataset: 
+  - self_cognition_magedu  # 这里填写在dataset_info.json中注册的数据集名称，将使用其所有样本
   #- alpaca_zh_demo#200     # 联合的通用指令数据集
   #- sharegpt  # 添加多轮对话数据增加多样性
 cutoff_len: 2048
 overwrite_cache: true
 
 ### output
-output_dir: finetuned/deepseek-r1-mage-sft  # 训练输出目录
+output_dir: finetuned/deepseek-r1-magedu-sft  # 训练输出目录
 logging_steps: 10
 save_steps: 500
 plot_loss: true
