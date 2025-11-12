@@ -1,0 +1,48 @@
+# LiteLLM Proxy 配置 - 阶段0 内网生产
+model_list:
+  - model_name: qwen3-8b
+    litellm_params:
+      model: openai/qwen3-8b
+      api_base: http://inference-engine:8001/v1
+      api_key: "EMPTY"
+    model_info:
+      max_tokens: 32768
+
+# 语义缓存（Redis DB 0）
+cache:
+  type: redis
+  redis:
+    host: redis-cache
+    port: 6379
+    password: magedu.com
+    db: 0
+    cache_ttl: 3600
+    cache_prefix: "litellm:"
+
+# 速率限制
+rate_limit_policy:
+  default:
+    requests: 100
+    interval: 60
+
+# 监控
+metrics:
+  prometheus:
+    enabled: true
+    endpoint: /metrics
+    port: 4001
+
+# 内网安全
+general_settings:
+  disable_key_management: true
+  disable_spend_logs: true
+  return_openai_object: true
+  store_model_in_db: false
+  environment_variables:
+    SEPARATE_HEALTH_APP: "1"
+    SEPARATE_HEALTH_PORT: "4001"
+
+# 日志
+logging:
+  level: INFO
+  log_file: /app/logs/litellm.log

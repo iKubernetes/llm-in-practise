@@ -1,0 +1,127 @@
+version: '3.9'
+
+services:
+  # 1. LiteLLM Proxy - API 服务层 + 语义缓存 + 监控
+  litellm-proxy:
+    image: ghcr.io/berriai/litellm:main-latest
+    container_name: litellm-proxy
+    restart: unless-stopped
+    ports:
+      - "4000:4000"   # 主 API 端口（内网访问）
+      - "4001:4001"   # Prometheus 指标专用端口
+    environment:
+      #- CONFIG_PATH=/app/config.yaml
+      #- PORT=4000
+      - SEPARATE_HEALTH_APP=1   # 启用独立的健康检查应用
+      - SEPARATE_HEALTH_PORT=4001  # 指定指标服务运行在4001端口
+      - LITELLM_LOG_LEVEL=INFO
+      - REDIS_URL=redis://:magedu.com@redis-cache:6379/0
+      - PROMETHEUS_ENABLED=true
+      - PROMETHEUS_PORT=4001
+      - CACHE_TYPE=redis
+    volumes:
+      - ./config/litellm_config.yaml:/app/config.yaml:ro
+      - ./logs/litellm:/app/logs
+    entrypoint: ["litellm"]                     # 显式保留入口点
+    command: ["--config", "/app/config.yaml", "--port", "4000"]  # 正确：参数数组
+    depends_on:
+      - inference-engine
+      - redis-cache
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - llm-net
+
+  # 2. vLLM - 推理引擎（加载 Qwen3-8B 非量化）
+  inference-engine:
+    image: vllm/vllm-openai:latest
+    container_name: inference-engine
+    restart: unless-stopped
+    ports:
+      - "8001:8001"   # vLLM OpenAI API 端口（内网调试用）
+    volumes:
+      - /Models/Pretrained_Models/Qwen3-8B:/models/Qwen3-8B:ro
+      - ./logs/vllm:/logs
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    command: >
+      --host 0.0.0.0
+      --port 8001
+      --model /models/Qwen3-8B
+      --tensor-parallel-size 1
+      --max-model-len 32768
+      --gpu-memory-utilization 0.90
+      --enable-prefix-caching
+      --disable-log-requests
+      --served-model-name qwen3-8b
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/v1/models"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - llm-net
+
+  # 3. Redis - 双命名空间缓存（语义 + KV）
+  redis-cache:
+    image: redis:7-alpine
+    container_name: redis-cache
+    restart: unless-stopped
+    volumes:
+      - ./data/redis:/data
+      - ./config/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    command: redis-server /usr/local/etc/redis/redis.conf
+    networks:
+      - llm-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "magedu.com", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # 4. Redis Exporter - Redis 指标暴露
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.80.0-alpine
+    container_name: redis-exporter
+    restart: unless-stopped
+    command: --redis.addr=redis://:magedu.com@redis-cache:6379
+    expose:
+      - "9121"
+    networks:
+      - llm-net
+    depends_on:
+      - redis-cache
+
+  # 5. Prometheus - 统一监控
+  prometheus:
+    image: prom/prometheus:v3.7.3
+    container_name: prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./data/prometheus:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+    networks:
+      - llm-net
+
+networks:
+  llm-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24

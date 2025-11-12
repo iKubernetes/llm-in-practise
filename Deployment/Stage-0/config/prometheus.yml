@@ -1,0 +1,19 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'litellm-proxy'
+    static_configs:
+      - targets: ['litellm-proxy:4001']
+    metrics_path: /metrics
+
+  - job_name: 'vllm-inference'
+    static_configs:
+      - targets: ['inference-engine:8001']
+    metrics_path: /metrics
+
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+    metrics_path: /metrics
