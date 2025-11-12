@@ -222,14 +222,14 @@ model_list:
       model: openai/qwen3-8b   # LiteLLM内部使用的模型标识符，格式为`provider/model-name`
       api_key: os.environ/OPENAI_API_KEY  # 推荐从环境变量读取密钥
       api_base: https://api.openai.com/v1  # 模型API的基础地址
-    model_info:  # 【可选】模型元数据
-      base_model: "gpt-4o"
+    model_info:  # 模型元数据
+      base_model: "qwen3-8b"
       max_tokens: 4096
 ```
 
 关键字段说明：
 
-- model_name: 客户端请求时使用的名称（如"model": "gpt-4o-prod"），你可以为此名称配置多个后端以实现负载均衡
+- model_name: 客户端请求时使用的名称（如"model": "qwen3-8b-prod"），你可以为此名称配置多个后端以实现负载均衡
 - litellm_params:
   - model: 实际的后端模型，格式为“提供商/模型名”，例如 azure/your-deployment-name、ollama/llama3、anthropic/claude-3-sonnet等
   - api_key, api_base: 连接模型所需的认证和地址信息
@@ -260,4 +260,59 @@ docker volume prune -f
 # 清理网络
 docker network prune -f
 ```
+
+
+
+## 带过滤的系统
+
+
+
+moderation 端点
+
+LiteLLM Proxy 默认发送请求体 JSON：
+
+```json
+{
+  "model": "moderation-model",
+  "input": "用户输入文本"
+}
+```
+
+返回必须是如下格式的内容，或者至少 flagged 字段存在。
+
+```json
+{
+  "flagged": true,
+  "label": "violence",
+  "score": 0.98
+}
+```
+
+如果直接用 vLLM 的 /v1/chat/completions，返回的是原始文本，需要在LiteLLM Proxy 做解析模板或使用 ModerationModel 类型的包装模型。
+
+
+
+配置示例：
+
+```yaml
+litellm_settings:
+  input_moderation: true
+  output_moderation: true
+  moderation_action: "block"
+  # 指向 LiteLLM 内置 Moderation 封装
+  # 如果是 vLLM moderation 模型，需要用特定模型映射
+  custom_moderation_endpoint: "http://vllm-moderation:8001/v1/completions"
+  moderation_model_name: "qwen2.5-moderation"
+```
+
+注意：
+
+- moderation_model_name 必须指向 你在 model_list 中注册的 moderation 模型。
+- custom_moderation_endpoint 必须与模型的 OpenAI API 接口匹配，最好使用 /v1/completions 而非 /v1/chat/completions，因为 LiteLLM Proxy 会自动封装成标准 input 字段。
+
+
+
+
+
+
 
