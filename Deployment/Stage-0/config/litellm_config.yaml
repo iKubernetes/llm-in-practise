@@ -38,6 +38,7 @@ general_settings:
   disable_spend_logs: true
   return_openai_object: true
   store_model_in_db: false
+  enable_metrics: true
   environment_variables:
     SEPARATE_HEALTH_APP: "1"
     SEPARATE_HEALTH_PORT: "4001"
