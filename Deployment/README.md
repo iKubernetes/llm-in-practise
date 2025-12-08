@@ -312,7 +312,7 @@ litellm_settings:
 
 
 
+## 其它类似的项目
 
-
-
+优先 Optillm 或 LM-Proxy，它们在 Reddit 社区（如 r/LocalLLaMA）中被推荐用于生产环境，避免 LiteLLM 的配置复杂性。
 

@@ -85,12 +85,6 @@ curl http://localhost:8000/v1/chat/completions \
 
 
 
-
-
-
-
-
-
 ### 推荐的 docker-compose.yml 模板
 
 锁定容器化vLLM最佳实践的示例模板
@@ -127,7 +121,7 @@ services:
               count: 1
               capabilities: [gpu]
     healthcheck: # 4. 健康检查
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/v1/models || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -139,7 +133,7 @@ services:
 ### vLLM和Open WebUI示例
 
 ```yaml
-version: '3.8'
+version: '3.9'
 
 services:
   # ----------------------------------------
