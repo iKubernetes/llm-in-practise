@@ -1,4 +1,6 @@
-# litellm-proxy
+# Litellm-Proxy 实践教程
+
+
 
 LiteLLM Proxy（也称为 LiteLLM AI Gateway 或 LLM Proxy Server）是一款知名的开源的代理服务器和 AI 网关工具，由 BerriAI 开发。它允许开发者通过统一的 OpenAI 兼容 API 接口调用超过 100 个大型语言模型（LLM）提供商，包括 OpenAI、Azure、Anthropic、Hugging Face、Bedrock、TogetherAI、VertexAI、Cohere、Sagemaker、VLLM 和 NVIDIA NIM 等。 该工具的核心目标是简化多提供商 LLM 的集成、管理和监控，支持负载均衡、成本跟踪、预算控制和日志记录等功能。它本质上是一个 LLM 网关，能够将不同的 LLM API 标准化为 OpenAI 格式的输入/输出，从而减少开发者在切换模型时的适配工作。
 
