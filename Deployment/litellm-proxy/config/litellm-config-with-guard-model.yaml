@@ -1,0 +1,46 @@
+# LiteLLM Proxy 配置 - 阶段0 内网生产 (启用 Llama-Guard-3)
+
+model_list:
+  # 1. 主推理模型 (Qwen3-8B)
+  - model_name: qwen3-8b
+    litellm_params:
+      model: openai/qwen3-8b
+      api_base: http://inference-engine:8001/v1
+      api_type: openai
+      api_key: "EMPTY"
+    model_info:
+      max_tokens: 16384
+  # 2. 安全审核模型 (Llama-Guard-3-8B) - 指向 guard-engine 容器
+  - model_name: llama-guard-3
+    litellm_params:
+      model: openai/llama-guard-3
+      api_base: http://guard-engine:8002/v1
+      #api_type: openai
+      api_type: openai
+      api_key: "EMPTY"
+      health_check_url: http://guard-engine:8002/v1/models
+    # Llama-Guard 模型的 model_info 可以根据实际需求设置
+
+guardrails:
+  - guardrail_name: "llama-guard-content-check"
+    litellm_params:
+      guardrail: openai_moderation
+      mode: "pre_call"
+      #mode: ["pre_call", "post_call"] 
+      api_key: "EMPTY"
+      model: "llama-guard-3"     # Optional, defaults to omni-moderation-latest
+      api_base: "http://llama-guard-wrapper:8099/v1"  # Optional, defaults to OpenAI API
+      default_on: true
+
+general_settings:
+  proxy_batch_write_at: 60 # Batch write spend updates every 60s
+  #disable_key_management: true
+  #return_openai_object: true
+  #moderation_model: llama-guard-3
+  #disable_spend_logs: true
+  #store_model_in_db: false
+
+# 日志
+logging:
+  level: INFO
+  log_file: /app/logs/litellm.log

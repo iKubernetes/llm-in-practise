@@ -1,0 +1,103 @@
+version: '3.9'
+
+services:
+  # 1. LiteLLM Proxy - API 服务层 + 语义缓存 + 监控
+  litellm-proxy:
+    image: ghcr.io/berriai/litellm:main-latest
+    container_name: litellm-proxy
+    restart: unless-stopped
+    ports:
+      - "4000:4000"   # 主 API 端口（内网访问）
+    environment:
+      #- CONFIG_PATH=/app/config.yaml
+      #- PORT=4000
+      - LITELLM_LOG=DEBUG
+      - DATABASE_URL=postgresql://llmproxy:dbmagedu-com@litellm-db:5432/litellm
+      - STORE_MODEL_IN_DB=True
+      - LITELLM_MASTER_KEY=magedu.com
+    volumes:
+      - ./config/litellm-config.yaml:/app/config.yaml:ro
+      - ./logs/litellm:/app/logs
+    entrypoint: ["litellm"]                     # 显式保留入口点
+    command: ["--config", "/app/config.yaml", "--port", "4000", "--detailed_debug"]  # 正确：参数数组
+    depends_on:
+      - inference-engine
+    healthcheck:
+      test: [ "CMD-SHELL", "wget --no-verbose --tries=1 http://localhost:4000/health/liveliness || exit 1" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - llm-net
+
+  # 2. litellm-db
+  litellm-db:
+    image: postgres:16
+    restart: always
+    container_name: litellm-db
+    environment:
+      - POSTGRES_DB=litellm
+      - POSTGRES_USER=llmproxy
+      - POSTGRES_PASSWORD=dbmagedu-com
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data # Persists Postgres data across container restarts
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d litellm -U llmproxy"]
+      interval: 1s
+      timeout: 5s
+      retries: 10
+    networks:
+      - llm-net
+
+  # 3. vLLM - 推理引擎（加载 Qwen3-8B 非量化）
+  inference-engine:
+    image: vllm/vllm-openai:v0.11.2
+    container_name: inference-engine
+    restart: unless-stopped
+    ports:
+      - "8001:8001"   # vLLM OpenAI API 端口（内网调试用）
+    volumes:
+      - ~/.cache/huggingface:/root/.cache/huggingface # 共享 HF 缓存
+      - /Models/Pretrained_Models/Qwen3-8B:/models/Qwen3-8B:ro
+      - ./logs/vllm:/logs
+      - ./config:/config
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              #count: 1
+              device_ids: ['0']
+              capabilities: [gpu]
+    ipc: host # 优化多卡通信性能（单卡也可用）
+    command: >
+      --host 0.0.0.0
+      --port 8001
+      --model /models/Qwen3-8B
+      --chat-template /config/chat_template.jinja
+      --dtype auto
+      --tensor-parallel-size 1
+      --max-model-len 4096
+      --gpu-memory-utilization 0.90
+      --enable-prefix-caching
+      --disable-log-requests
+      --served-model-name qwen3-8b
+      --trust-remote-code
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - llm-net
+
+networks:
+  llm-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24

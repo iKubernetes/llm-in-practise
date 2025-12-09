@@ -1,0 +1,54 @@
+version: "3.9"
+
+services:
+  llama-guard-wrapper:
+    build: .
+    container_name: llama-guard-wrapper
+    ports:
+      - "8099:8099"
+    environment:
+      WRAPPER_PORT: 8099
+      MODEL_API_URL: "http://guard-engine:8002"   # 指向可用的 LlaMA-Guard-3 服务地址
+      MODEL_NAME: "llama-guard-3"
+      LOG_LEVEL: "INFO"
+    depends_on:
+      - guard-engine
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:${WRAPPER_PORT}/healthz || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    networks:
+      - llm-net
+
+  guard-engine:
+    image: vllm/vllm-openai:v0.11.2
+    container_name: guard-engine
+    restart: unless-stopped
+    volumes:
+      - /Models/Pretrained_Models/Llama-Guard-3-8B:/models/guard:ro
+    ports:
+      - "8002:8002"   # vLLM OpenAI API 端口（内网调试用）
+    command: >
+      --host 0.0.0.0 --port 8002
+      --model /models/guard
+      --served-model-name llama-guard-3
+      --max-model-len 8192
+      --gpu-memory-utilization 0.90
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              #count: 1
+              device_ids: ['2']
+              capabilities: [gpu]        
+    networks:
+      - llm-net
+
+networks:
+  llm-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24

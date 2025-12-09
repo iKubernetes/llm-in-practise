@@ -1,0 +1,22 @@
+# LiteLLM Proxy 配置 - 阶段0 内网生产 (启用 Llama-Guard-3)
+
+model_list:
+  # 1. 主推理模型 (Qwen3-8B)
+  - model_name: qwen3-8b
+    litellm_params:
+      model: openai/qwen3-8b
+      api_base: http://inference-engine:8001/v1
+      api_key: "EMPTY"
+    model_info:
+      max_tokens: 16384
+
+general_settings:
+  disable_key_management: true
+  return_openai_object: true
+  #disable_spend_logs: true
+  #store_model_in_db: false
+
+# 日志
+logging:
+  level: INFO
+  log_file: /app/logs/litellm.log

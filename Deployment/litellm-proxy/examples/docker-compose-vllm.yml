@@ -1,0 +1,50 @@
+version: '3.9'
+
+services:
+  # 1. vLLM - 推理引擎（加载 Qwen3-8B 非量化）
+  inference-engine:
+    image: vllm/vllm-openai:v0.11.2
+    container_name: inference-engine
+    restart: unless-stopped
+    ports:
+      - "8001:8001"   # vLLM OpenAI API 端口（内网调试用）
+    volumes:
+      - ~/.cache/huggingface:/root/.cache/huggingface # 共享 HF 缓存
+      - /Models/Pretrained_Models/Qwen3-8B:/models/Qwen3-8B:ro
+      - ./logs/vllm:/logs
+      - ./config:/config
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              #count: 1
+              device_ids: ['0']
+              capabilities: [gpu]
+    ipc: host # 优化多卡通信性能（单卡也可用）
+    command: >
+      --host 0.0.0.0
+      --port 8001
+      --model /models/Qwen3-8B
+      --chat-template /config/chat_template.jinja
+      --tensor-parallel-size 1
+      --max-model-len 4096
+      --gpu-memory-utilization 0.90
+      --enable-prefix-caching
+      --disable-log-requests
+      --served-model-name qwen3-8b
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/v1/models"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - llm-net
+
+networks:
+  llm-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24

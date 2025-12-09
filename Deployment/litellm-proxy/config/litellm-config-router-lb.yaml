@@ -1,0 +1,92 @@
+# config.yaml —— 适用于 10k~100k RPM 的终极容错 + 成本优化方案
+model_list:
+  # 1. 主力模型组：deepseek-r1
+  - model_name: deepseek-r1
+    litellm_params:
+      model: openai/deepseek-r1
+      api_base: http://deepseek-r1-01:8001/v1
+      api_key: EMPTY
+      input_cost_per_token: 0.0000028  # 2.8 / 1M tokens
+      output_cost_per_token: 0.0000028
+      rpm: 3000
+      tpm: 1200000
+    weight: 0.5
+    priority: 100
+    metadata:
+      region: cn-south-1
+
+  - model_name: deepseek-r1
+    litellm_params:
+      model: openai/deepseek-r1
+      api_base: http://deepseek-r1-02:8002/v1
+      api_key: EMPTY
+      input_cost_per_token: 0.0000028  # 2.8 / 1M tokens
+      output_cost_per_token: 0.0000028
+      rpm: 2000
+    weight: 0.3
+
+  # 2. 高性能备用：qwen3
+  - model_name: qwen3
+    litellm_params:
+      model: openai/qwen3
+      api_base: http://qwen3-4b:8003/v1
+      api_key: EMPTY
+      input_cost_per_token: 0.000012  # 12.0 / 1M
+      output_cost_per_token: 0.000012
+      rpm: 800
+      tpm: 800000
+    weight: 0.2
+
+  # 3. 终极兜底：llama3
+  - model_name: llama3
+    litellm_params:
+      model: openai/llama3
+      api_base: http://llama3:8004/v1
+      api_key: EMPTY
+      input_cost_per_token: 0.0000008  # 0.8 / 1M
+      output_cost_per_token: 0.0000008
+      rpm: 5000
+      tpm: 2000000
+    fallback: true
+
+# Router 终极容错配置
+router_settings:
+  # 1. 负载均衡策略：先成本最低，再最闲
+  routing_strategy: cost-based-routing     # 第一优先成本，其次 least-busy
+  # 如果更在乎延迟，可改成：least-busy
+
+  # 2. 重试机制：429 多试几次，其他错误少打扰
+  num_retries: 3
+  fallback_retries: true                   # 备用模型也重试
+  retry_policy:
+    RateLimitErrorRetries: 5              # 429 最多再试 5 次
+    InternalServerErrorRetries: 3
+    TimeoutErrorRetries: 4
+
+  # 3. 冷却机制：瞬时故障 5 秒，持续故障 2 分钟
+  allowed_fails: 6                         # 60 秒内失败 6 次才长冷却
+  cooldown_time: 120                       # 严重故障冷却 2 分钟
+  # 429 自动 5 秒轻量冷却由系统内置，无需配置
+
+  # 4. Fallback 顺序
+  fallbacks:
+  - {"deepseek-r1": ["qwen3", "llama3"]}
+  - {"qwen3": ["llama3"]}
+
+  # 5. 全局兜底
+  default_fallbacks: ["llama3"]
+
+  # 6. 上下文超长自动切大模型
+  litellm_settings:
+    context_window_fallbacks:
+      - from_model: deepseek-r1
+        to_model: ["qwen3"]         # 上下文不够直接切 qwen3
+
+  # 7. 分布式状态共享（多 Pod 必开）
+  #redis_host: redis://redis-stack:6379
+  #redis_password: magedu.com
+
+  # 8. 其他生产调优
+  health_check_interval: 30
+  timeout: 90
+  enable_pre_call_checks: true
