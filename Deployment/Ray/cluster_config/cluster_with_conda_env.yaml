@@ -1,0 +1,22 @@
+cluster_name: ray-two-nodes-conda
+min_workers: 1
+max_workers: 1
+
+provider:
+  type: local
+  head_ip: 172.25.0.100
+  worker_ips:
+    - 172.25.0.200
+
+auth:
+  ssh_user: marion
+
+# 节点初始化命令（在 head 和 worker 上都会执行）
+setup_commands:
+  - source ~/.bashrc
+  - conda activate vllm
+  - pip install -U ray==2.50.1
+
+# 文件同步（可选）
+file_mounts: {}
+

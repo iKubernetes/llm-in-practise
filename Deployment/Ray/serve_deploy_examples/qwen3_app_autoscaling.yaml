@@ -1,0 +1,23 @@
+applications:
+  - name: qwen3_app
+    route_prefix: /
+    import_path: ray.serve.llm:build_openai_app
+    args:
+      llm_configs:
+        - model_loading_config:
+            model_id: qwen3
+            model_source: /Models/Pretrained_Models/Qwen3-4B-AWQ/
+          deployment_config:
+            autoscaling_config:
+              min_replicas: 1
+              max_replicas: 2  # 根据负载和节点数调整
+              target_ongoing_requests: 50  # 关键指标, 每个 replica 目标并发数
+              upscale_delay: 30.0       # 扩容延迟（秒），建议 30~60
+              downscale_delay: 300.0    # 缩容延迟（秒），建议 300~600
+            max_ongoing_requests: 64  # 每个 replica 最大并发（防雪崩）
+          engine_kwargs:
+            quantization: awq  # 关键：指定 AWQ 量化方法
+            tensor_parallel_size: 1  # 多卡时调整，例如 2/4/8
+            gpu_memory_utilization: 0.5
+            max_model_len: 4096
+            trust_remote_code: true
