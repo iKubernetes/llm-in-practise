@@ -1,0 +1,54 @@
+applications:
+  # --- 第一个应用：Qwen3-0.6B（基础版/非量化） ---
+  - name: qwen3_0_6b_app
+    route_prefix: /app1
+    import_path: ray.serve.llm:build_openai_app
+    args:
+      llm_configs:
+        - model_loading_config:
+            model_id: qwen3-0.6b
+            model_source: /Models/Pretrained_Models/Qwen3-0.6B/
+          deployment_config:
+            # 自动扩缩配置（针对较小的模型）
+            autoscaling_config:
+              min_replicas: 1
+              max_replicas: 3 
+              target_ongoing_requests: 8 # 相对更高的并发目标
+              upscale_delay: 5.0
+              downscale_delay: 60.0 # 缩容稍微保守一些
+            max_ongoing_requests: 128 # 允许更高的最大并发请求数
+          engine_kwargs:
+            # 基础模型的推理参数
+            tensor_parallel_size: 1
+            gpu_memory_utilization: 0.45
+            max_model_len: 4096
+            trust_remote_code: true
+            # quantization: None # 默认不量化或使用配置的默认值
+
+  # --- 第二个应用：Qwen3-4B-AWQ（量化版） ---
+  - name: qwen3_4b_awq_app
+    route_prefix: /app2 # 新的路由前缀，用于区分
+    import_path: ray.serve.llm:build_openai_app
+    args:
+      llm_configs:
+        - model_loading_config:
+            model_id: qwen3-4b-awq
+            model_source: /Models/Pretrained_Models/Qwen3-4B-AWQ # 第二个模型的路径
+          deployment_config:
+            # 自动扩缩配置（针对较大的模型）
+            autoscaling_config:
+              min_replicas: 1
+              max_replicas: 2 # 限制最大副本数，因为 4B 模型资源消耗更高
+              target_ongoing_requests: 3 # 关键：对大模型设置更低的并发目标，以保证低延迟
+              upscale_delay: 10.0 # 扩容稍慢，避免瞬时波动
+              downscale_delay: 300.0 # 缩容设置得更保守
+            max_ongoing_requests: 64 # 最大并发请求数
+            # ray_actor_options:
+            #   num_gpus: 1 # 4B 模型可能需要完整的 GPU
+          engine_kwargs:
+            # AWQ 量化配置
+            quantization: awq # 明确指定使用 AWQ 量化
+            tensor_parallel_size: 1
+            gpu_memory_utilization: 0.9 # 量化模型通常需要占用更高的 GPU 内存
+            max_model_len: 4096
+            trust_remote_code: true

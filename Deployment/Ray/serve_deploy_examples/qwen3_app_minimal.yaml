@@ -6,10 +6,11 @@ applications:
       llm_configs:
         - model_loading_config:
             model_id: qwen3
-            model_source: /Models/Pretrained_Models/Qwen3-4B/
+            model_source: /Models/Pretrained_Models/Qwen3-4B-AWQ/
           deployment_config:
             max_ongoing_requests: 64  # 单副本最大并发（防雪崩）
           engine_kwargs:
+            quantization: awq
             tensor_parallel_size: 1  # 多卡时调整，例如 2/4/8
             gpu_memory_utilization: 0.9
             max_model_len: 32768
