@@ -57,8 +57,23 @@ Ray Serve Application（即一个完整的 Serve Graph / DAG）的创建与启�
 2. 安装Ray（含Serve），Ray 版本 ≥ 2.43.0，同时安装 ray[serve,llm] 和 vllm
 
    ```bash
-   pip install "ray[default,serve,llm]" vllm transformers torch
+   pip install "ray[default,serve,llm]" vllm==0.10.2 transformers torch
    ```
+
+​	  
+
+3. 安装完成后，检查安装的版本。
+
+   ```bash
+   python -c "import vllm; print(vllm.__version__)"
+   python -c "import ray; print(ray.__version__)"
+   ```
+
+
+
+​    **提示：** 注意ray和vllm的兼容性，目前的ray 2.52.1版本与vllm 0.10.2兼容，与后续版本的兼容性需要自行验证。
+
+
 
 
 
@@ -460,11 +475,12 @@ applications:
     args:
       llm_configs:
         - model_loading_config:
-            model_id: qwen3-8b
+            model_id: qwen3
             model_source: /Models/Pretrained_Models/Qwen3-8B/
           deployment_config:
             max_ongoing_requests: 128  # 高并发推荐            
           engine_kwargs:
+            # quantization: awq  # 若加载的是量化的模型，需要启用该参数并为其指定量化的方法名称
             tensor_parallel_size: 1  # 多卡时调整，例如 2/4/8
             gpu_memory_utilization: 0.9
             max_model_len: 32768
@@ -492,6 +508,19 @@ serve deploy qwen3_app_minimal.yaml --address http://127.0.0.1:8265
 也可以通过ray dashboard来了解serve和cluster等相关的状态。
 
 ![ray_dashboard](./images/ray_dashboard.png)
+
+
+
+确保application实例正常运行后，即可发起访问测试。
+
+```
+curl -X POST http://127.0.0.1:8000/v1/chat/completions   -H "Content-Type: application/json"   -d '{
+    "model": "qwen3",
+    "messages": [
+      {"role": "user", "content": "你好，能介绍一下你自己吗？"}
+    ]
+}'
+```
 
 
 
@@ -562,25 +591,234 @@ sudo rm -f /var/run/ray_*          # 某些系统会在这里留 pid 文件
 
 
 
-
-
 ### 示例2：自动扩缩容
 
+Ray Serve 的自动缩放功能允许部署根据流量来动态调整副本（replicas）数量，主要通过在部署选项中设置 num_replicas="auto" 或显式传递 autoscaling_config（字典或 AutoscalingConfig 对象）来启用。
 
+使用 num_replicas="auto" 时，Ray Serve 会自动应用默认配置；否则就需要手动配置 autoscaling_config 以实现缩放。自动缩放基于每个副本的正在处理请求数（ongoing requests）进行决策，目标是保持负载均衡并优化资源利用。
+
+
+
+**核心工作原理：**
+
+1. 监控指标：Serve 自动扩缩器会持续监控每个部署（Deployment）的内部请求队列大小和正在处理中的请求数量。
+2. 决策逻辑：它会将实际的“每个副本正在处理的平均请求数”与配置中设置的目标值（target_ongoing_requests）进行比较。
+   - 如果实际值显著大于目标值，表明当前副本数不足以应对流量，系统将扩容（增加副本）。
+   - 如果实际值显著小于目标值，表明资源利用率低，系统将缩容（减少副本）。
+3. 频率：扩缩决策的运行频率很高（默认每 0.1 秒，可通过配置调整），以快速响应流量变化。
+4. 平滑度：默认使用时间加权平均来计算指标（"mean"），以确保平滑的扩缩行为，避免对瞬时流量波动反应过度。
+
+
+
+**关键配置参数：**
+
+| 参数名                                | 类型                      | 默认值                | 描述                                                         |
+| ------------------------------------- | ------------------------- | --------------------- | ------------------------------------------------------------ |
+| min_replicas                          | 非负整数                  | 1                     | 最小副本数，支持 scale-to-zero（设为 0），但会导致首次请求时的“冷启动” |
+| max_replicas                          | 正整数                    | 100（auto 时）/1      | 最大副本数，控制峰值容量； 必须大于min_replicas的值；依赖 Ray Autoscaler 来确保有足够的集群资源来容纳这些最大副本 |
+| initial_replicas                      | 非负整数 或 None          | None（=min_replicas） | 初始启动副本数，用于预热                                     |
+| target_ongoing_requests               | 正浮点数                  | 2                     | 每个副本正在处理请求数，核心缩放指标，请求处理时间越长、对延迟要求越高，这个值应设置得越小，以促使系统更积极地扩容 |
+| upscale_delay_s                       | 非负浮点数                | 30.0                  | 两次连续扩容决策之间的最小延迟（秒）                         |
+| downscale_delay_s                     | 非负浮点数                | 600.0                 | 两次连续缩容决策之间的最小延迟（秒）                         |
+| downscale_to_zero_delay_s             | 非负浮点数 或 None        | None                  | 从 1 到 0 副本的专属下缩延迟                                 |
+| metrics_interval_s                    | 正浮点数                  | 10.0                  | 指标报告频率                                                 |
+| look_back_period_s                    | 正浮点数                  | 30.0                  | 指标平均计算的时间窗口                                       |
+| aggregation_function                  | str ("mean"/"max"/"min")  | "mean"                | 回看期内指标聚合方式                                         |
+| upscaling_factor / downscaling_factor | 正浮点数 或 None          | 1.0                   | 上缩/下缩激进程度倍数（部分版本用 smoothing_factor 替代）    |
+| policy                                | AutoscalingPolicy 或 None | None                  | 自定义自动缩放策略（高级）                                   |
+
+
+
+**示例：**如下配置定义了一个名为 qwen3_app 的应用，它使用了 Ray Serve 提供的 build_openai_app 模板来暴露一个兼容 OpenAI API 的接口，用于服务 Qwen3 模型。
+
+```yaml
+applications:
+  - name: qwen3_app
+    route_prefix: /
+    import_path: ray.serve.llm:build_openai_app
+    args:
+      llm_configs:
+        - model_loading_config:
+            model_id: qwen3
+            model_source: /Models/Pretrained_Models/Qwen3-0.6B/
+          deployment_config:
+            autoscaling_config:
+              min_replicas: 1
+              max_replicas: 2  # 根据负载和节点数调整
+              target_ongoing_requests: 5  # 关键指标, 每个 replica 目标并发数
+              upscale_delay: 5.0       # 扩容延迟（秒），建议 30~60
+              downscale_delay: 30.0    # 缩容延迟（秒），建议 300~600
+            max_ongoing_requests: 64  # 每个 replica 最大并发（防雪崩）
+            #ray_actor_options:
+              #num_gpus: 0.5  # 每个副本所需的 GPU 数量设置为 0.5
+          engine_kwargs:
+            #quantization: awq  # 指定量化方法
+            tensor_parallel_size: 1  # 多卡时调整，例如 2/4/8
+            gpu_memory_utilization: 0.45
+            max_model_len: 4096
+            trust_remote_code: true
+```
+
+
+
+**调整建议：**
+
+- 如果希望支持 scale-to-zero（流量为0时缩容到0，节省资源），可以将 min_replicas: 0（但首次请求会有较长冷启动时间）。
+
+- max_replicas请根据Ray集群可用GPU数量设置（每个副本默认占用1个GPU，当 tensor_parallel_size > 1 时会占用更多）。
+
+- 部署后可通过Ray Dashboard监控replicas数量和请求指标，必要时进一步调优 target_ongoing_requests（值越小，副本越多，单请求延迟越低）。
+
+- 如果 AWQ 模型是标准 AutoAWQ 格式（GEMM/GEMV，group_size=128），vLLM 会自动兼容，无需额外配置。
+
+  
+
+运行如下命令，即可于指定的Ray Cluster部署相应的Application。
+
+```bash
+serve deploy qwen3_app_autoscaling.yaml
+```
+
+
+
+**压力测试：**
+
+Locust 是一款开源的、易于使用且具有高可扩展性的性能测试工具，使用 Python 编写，其核心思想是模拟大量用户（或称为“蝗虫”，Locusts）并发地访问目标系统，以测量系统在不同负载下的性能表现。
+
+Locust 提供了一个直观的 Web 界面，允许用户在测试运行时实时监控各项关键指标，如并发用户数 (Number of Users)、每秒事务数 (Requests per Second, RPS)、响应时间百分位值 (Latency Percentiles)和失败请求数 (Failures)等。
+
+
+
+运行如下命令即可安装压力测试工具Locust：
+
+```bash
+pip install locust
+```
+
+而后，基于scripts目录下的locustfile.py脚本启动压力测试。
+
+```bash
+locust -f ../scripts/locustfile.py
+```
+
+接着，打开浏览器访问 Locust 提供的 Web 界面（通常是 http://0.0.0.0:8089），在界面中按需设置参数后，即可启动压力测试。
+
+- Users (并发用户数): 设置为 20 (匹配 --concurrency 20)
+- Spawn Rate (每秒启动用户数): 任意合理值，例如 5
+
+![locust](./images/locust.png)
+
+
+
+随后，查看serve status，可以看到正在进行扩容的过程（例如下面示例输出中的“message: Upscaling from 1 to 2 replicas.”），或者已经扩展到两个实例的结果。
+
+```bash
+~$ serve status
+proxies:
+  1701a8af8401ecc6a3b58b6a091172eb5a8e72fb89c5a416b7a541fc: HEALTHY
+applications:
+  qwen3_app:
+    status: RUNNING
+    message: ''
+    last_deployed_time_s: 1765861088.5769684
+    deployments:
+      LLMServer:qwen3:
+        status: UPSCALING
+        status_trigger: AUTOSCALING
+        replica_states:
+          STARTING: 1
+          RUNNING: 1
+        message: Upscaling from 1 to 2 replicas.
+      OpenAiIngress:
+        status: HEALTHY
+        status_trigger: CONFIG_UPDATE_COMPLETED
+        replica_states:
+          RUNNING: 1
+        message: ''
+```
+
+
+
+中断前面进行的压力测试后，serve application的规模即缩容至能承载流量的合适副本数，或者为设定的默认值。
 
 
 
 ### 示例3：单节点多app、多GPU
 
+Ray Serve 支持部署多个独立的应用（multi-application），这是从 Ray 2.x 版本引入的重要特性（早期版本仅支持单个应用）。每个Application是由一个或多个 Deployment 组成的逻辑单元，通常通过模型组合（model composition）形成有向无环图（DAG），其中有一个 ingress deployment 作为入口处理 HTTP 请求或内部调用。
+
+多应用主要通过 YAML 配置文件（ServeDeploySchema）进行声明式部署，这是生产推荐方式。基本的配置结构如下：
+
+```yaml
+proxy_location: EveryNode  # 或 HeadOnly，代理位置
+http_options:             # HTTP 配置（全局）
+  host: 0.0.0.0
+  port: 8000
+grpc_options:             # 可选 gRPC 配置
+  port: 9000
+  grpc_servicer_functions: []
+logging_config:           # 可选日志配置
+applications:             # 多应用列表（核心）
+  - name: app1            # 应用唯一名称（必填）
+    import_path: module:app_builder  # 代码导入路径，返回 Application 对象
+    route_prefix: /app1   # HTTP 路由前缀（必填，需唯一，不能重叠）
+    runtime_env:          # 应用级运行环境（可选）
+      working_dir: "." 
+      pip: ["torch"]
+      image_uri: "docker.io/user/app1:latest"  # 可选容器镜像（强隔离）
+    args: {}              # 传递给应用 builder 的参数（可选）
+    deployments:         # 覆盖或配置内部 deployment（可选）
+      - name: DeploymentA
+        num_replicas: 2
+        autoscaling_config: {...}
+        ray_actor_options:
+          num_cpus: 1
+          num_gpus: 0.5
+  - name: app2
+    ...
+```
 
 
 
+示例配置文件serve_app_two_models.yaml中定义了两个application，一个是模型Qwen3-0.6B，另一个是Qwen3-4B-AWQ，它们均支持自动扩缩容。运行如下命令即可将其部署至本地的Ray Cluster。
 
 ```bash
-serve deploy qwen3_app_autoscaling.yaml -a http://127.0.0.1:8265
+serve deploy qwen3_app_autoscaling.yaml
+```
+
+
+
+部署完成后，可以使用“serve status”或通过Dashboard了解部署的结果状态。
+
+![two_apps](./images/two_apps.png)
+
+
+
+运行有多个application时，需要为它们分别指定不同的Route Prefix，前面的示例中分别使用了/app1和/app2，运行如下命令即可了解它们分别对应的模型。
+
+```bash
+curl -fsS http://127.0.0.1:8000/app1/v1/models | jq .data[0].id
+"qwen3-0.6b"
+
+curl -fsS http://127.0.0.1:8000/app2/v1/models | jq .data[0].id
+"qwen3-4b-awq"
+```
+
+
+
+下面的命令，可向Route Prefix为/app2的application发起访问请求，目标模型为“qwen3-4b-awq”。
+
+```bash
+curl -X POST http://127.0.0.1:8000/app2/v1/chat/completions   -H "Content-Type: application/json"   -d '{
+    "model": "qwen3-4b-awq",
+    "messages": [
+      {"role": "user", "content": "你好，能介绍一下你自己吗？"}
+    ]
+}'
 ```
 
 
 
 ### 示例4：多节点集群
 
+多节点集群除了集群节点数量与单节点不同之外，其服务于serve application的逻辑是一样的。
