@@ -229,6 +229,60 @@ Total Usage:
 
 
 
+若需要进一步测试集群的健康状态，以及集群资源的可用状态，可通过scripts目录下的ray_cluster_healthcheck.py脚本进行。提交该脚本的方法有两种，一是直接使用python解释器运行。
+
+```bash
+python ray_cluster_healthcheck.py
+```
+
+二是以ray job作业的方式进行。
+
+```bash
+ray job submit --address http://127.0.0.1:8265  --working-dir ./  -- python ray_cluster_healthcheck.py
+```
+
+上面的命令运行时，通常会返回类似如下结果。
+
+```txt
+=== Ray Cluster Health Check ===
+Alive nodes: 2
+ - 172.25.0.100 | CPUs=15.0 | GPUs=1.0
+ - 172.25.0.200 | CPUs=15.0 | GPUs=1.0
+
+[CPU] Tasks ran on 1 unique hosts
+{'type': 'cpu', 'hostname': 'autodl-container-b52c468700-26a4f634', 'pid': 29684, 'node_id': '237de269430a523803b32c7d60ba194ea7b3ac16e102c398de5b07e5'}
+{'type': 'cpu', 'hostname': 'autodl-container-b52c468700-26a4f634', 'pid': 29681, 'node_id': '237de269430a523803b32c7d60ba194ea7b3ac16e102c398de5b07e5'}
+{'type': 'cpu', 'hostname': 'autodl-container-b52c468700-26a4f634', 'pid': 29683, 'node_id': '237de269430a523803b32c7d60ba194ea7b3ac16e102c398de5b07e5'}
+{'type': 'cpu', 'hostname': 'autodl-container-b52c468700-26a4f634', 'pid': 29684, 'node_id': '237de269430a523803b32c7d60ba194ea7b3ac16e102c398de5b07e5'}
+
+[GPU] Total GPUs visible to Ray: 2
+[GPU] Tasks ran on 2 unique hosts
+{'type': 'gpu', 'hostname': 'autodl-container-b52c468700-26a4f634', 'pid': 29685, 'gpu_info': '0, NVIDIA GeForce RTX 3090'}
+{'type': 'gpu', 'hostname': 'autodl-container-b52c468700-3263b82f', 'pid': 24823, 'gpu_info': '0, NVIDIA GeForce RTX 3090'}
+
+[Object Store] Testing data sharing...
+[Object Store] Data consumed on 1 unique hosts
+{'hostname': 'autodl-container-b52c468700-26a4f634', 'sum': 4194304.0}
+{'hostname': 'autodl-container-b52c468700-26a4f634', 'sum': 4194304.0}
+
+=== Health Check Summary ===
+CPU hosts: 1
+GPU hosts: 2
+Object Store hosts: 1
+
+Ray Cluster health check completed successfully.
+
+------------------------------------------
+Job 'raysubmit_Yq8wce483XprTjtk' succeeded
+------------------------------------------
+```
+
+
+
+
+
+
+
 ## serve run案例
 
 serve run 是 Ray Serve 官方提供的最重要、最常用的“开发神器”命令。 它本质上是“编程式 serve.run() 的 CLI 包装”，几乎一行命令就可以把整个 Serve Application 启动起来。
@@ -489,6 +543,8 @@ applications:
 
 
 
+**使用外部Dirver：**
+
 创建单节点ray cluster，并启动serve application。
 
 ```bash
@@ -505,7 +561,22 @@ serve deploy qwen3_app_minimal.yaml --address http://127.0.0.1:8265
 
 
 
-也可以通过ray dashboard来了解serve和cluster等相关的状态。
+**使用Ray Job：**
+
+创建单节点ray cluster，并以ray job命令提交作业。
+
+```bash
+# 1. 创建并启动集群：假设计划使用机 1 块 GPU
+ray stop # 确保没有旧的 Ray 进程
+ray start --head --num-gpus 1 --dashboard-host 0.0.0.0
+
+# 2. 提交作业
+ray job submit --address http://127.0.0.1:8265 --working-dir ./ -- serve deploy qwen3_app_minimal.yaml
+```
+
+
+
+随后，我们可以通过ray dashboard来了解serve和cluster等相关的状态。
 
 ![ray_dashboard](./images/ray_dashboard.png)
 
@@ -701,6 +772,10 @@ pip install locust
 locust -f ../scripts/locustfile.py
 ```
 
+**注意：**脚本locustfile.py中硬编码了要请求的目标模型（qwen3）、目标推理服务器地址（http://127.0.0.1:8000/）等，如若测试的目标环境有所不同，需要根据实际情况进行修改。
+
+
+
 接着，打开浏览器访问 Locust 提供的 Web 界面（通常是 http://0.0.0.0:8089），在界面中按需设置参数后，即可启动压力测试。
 
 - Users (并发用户数): 设置为 20 (匹配 --concurrency 20)
@@ -740,6 +815,21 @@ applications:
 
 
 中断前面进行的压力测试后，serve application的规模即缩容至能承载流量的合适副本数，或者为设定的默认值。
+
+
+
+另外，若需要以CLI的方式运行locust进行压力测试，可以使用类似如下方式进行。
+
+```bash
+locust -f locustfile.py --host http://localhost:8000 --headless -u 20 -r 5 --run-time 5m
+```
+
+其中用到的各参数如下：
+
+- --headless：不启动 Web UI，直接在终端运行
+- -u 20：总用户数（20 个虚拟用户并发请求）
+- -r 5：每秒启动用户数（5个用户/秒）
+- --run-time 5m：压测时长5分钟
 
 
 
@@ -821,4 +911,4 @@ curl -X POST http://127.0.0.1:8000/app2/v1/chat/completions   -H "Content-Type: 
 
 ### 示例4：多节点集群
 
-多节点集群除了集群节点数量与单节点不同之外，其服务于serve application的逻辑是一样的。
+多节点集群除了集群节点数量与单节点不同之外，其服务于serve application的逻辑是一样的。这里不再给出具体示例。
