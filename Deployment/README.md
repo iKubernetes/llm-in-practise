@@ -316,3 +316,8 @@ litellm_settings:
 
 优先 Optillm 或 LM-Proxy，它们在 Reddit 社区（如 r/LocalLLaMA）中被推荐用于生产环境，避免 LiteLLM 的配置复杂性。
 
+
+
+## 版权声明
+
+本项目由[马哥教育](http://www.magedu.com)开发，允许自由转载，但必须保留马哥教育及相关的一切标识。另外，商用需要征得马哥教育的书面同意。

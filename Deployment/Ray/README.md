@@ -279,7 +279,79 @@ Job 'raysubmit_Yq8wce483XprTjtk' succeeded
 
 
 
+#### 3. 基于Docker的Ray Cluster
 
+**示例环境说明：**
+
+- Ubuntu 2204 Server，有两个GPU（RTX 3090），设备编号为0和2
+- 计划在该主机上创建两个Docker容器，一个作为Head Node，加载0号GPU，另一个作为Worker Node，加载2号GPU
+- 使用的ray image为rayproject/ray:2.50.1-gpu，在没有GPU的环境中，建议使用以“-cpu”为后缀的image
+
+
+
+**启动Head Node：**
+
+```bash
+# 设定可见的GPU编号，若所有GPU均打算可，可省略该步骤
+export CUDA_VISIBLE_DEVICES=0,2
+
+# 启动Head Node
+docker run -d --name ray-head  --gpus '"device=0"' --network bridge -p 6379:6379 -p 8265:8265 -p 10001:10001 \
+    --shm-size=2gb  rayproject/ray:2.50.1-gpu ray start --head --port=6379 --dashboard-host=0.0.0.0 --block
+```
+
+
+
+等Head Node容器正常运行之后，使用如下命令获取其IP地址，以便用于后续的Worker Node的加入。
+
+```bash
+RAY-HEAD-IP=$(docker container inspect ray-head | jq .[0].NetworkSettings.Networks.bridge.IPAddress)
+```
+
+> 提示：若worker node运行于其它主机上，则无须上面的命令，而是在添加Worker Node时，直接使用ray-head容器所在主机的IP地址。
+
+
+
+**启动Worker Node：**
+
+运行如下命令，即可创建一个Worker Node容器，并加入到前面Head Node所代表的Ray Cluster中去。但需要注意的是，若Worker Node容器运行在不同的主机上，下面命令的变量${RAY-HEAD-IP}要替换为ray-head容器所在主机的IP地址。
+
+```bash
+docker run -d --name ray-worker-1 --gpus '"device=2"' --network bridge --shm-size=2gb rayproject/ray:2.50.1-gpu \
+    ray start --address=${RAY-HEAD-IP}:6379 --block
+```
+
+以类似上面命令的方式，可加入多个Worker Node至同一个Ray Cluster中。
+
+
+
+**验证集群状态：**
+
+- 通过WebUI进行：访问Head Node容器所在主机的8265端口即可；
+
+- 通过命令行进行（在ray-head容器所在的宿主机上运行如下命令即可）：
+
+  ```bash
+  docker exec -it ray-head ray status
+  ```
+
+  
+
+**尝试提交Job：**
+
+运行如下命令，提交用于测试集群健康状态的的python脚本ray_cluster_healthcheck.py，即可进行测试。下面命令中如果有ray-head容器所在的主机上运行，直接使用相应的容器IP或HOST IP都可以。如果在该主机外部的其它主机上运行，则需要使用HOST IP。
+
+```bash
+ray job submit --address http://${RAY-HEAD-IP}:8265  --working-dir ./  -- python ray_cluster_healthcheck.py
+```
+
+
+
+**注意：**
+
+- 上面的示例是在同一个具有两个可用GPU的主机上进行，如若使用的是不同的主机，且每个主机使用所有可用的GPU设备时，可省略相应的--gpus选项；
+- 上面示例中使用的ray image并没有附带vLLM，因此，其无法基于vLLM推理引擎将模型服务启动为serve application；
+- 若需要使用该功能，则应该手动构建Image，在前面使用的ray image的基础上安装vllm模块；或者，也可以以vllm image（例如vllm/vllm-openai:v0.10.2）为基础安装ray模块； 相对来说，后者需要的安装过程更快捷；
 
 
 
@@ -912,3 +984,11 @@ curl -X POST http://127.0.0.1:8000/app2/v1/chat/completions   -H "Content-Type: 
 ### 示例4：多节点集群
 
 多节点集群除了集群节点数量与单节点不同之外，其服务于serve application的逻辑是一样的。这里不再给出具体示例。
+
+
+
+
+
+## 版权声明
+
+本项目由[马哥教育](http://www.magedu.com)开发，允许自由转载，但必须保留马哥教育及相关的一切标识。另外，商用需要征得马哥教育的书面同意。

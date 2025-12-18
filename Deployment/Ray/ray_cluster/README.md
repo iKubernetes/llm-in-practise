@@ -226,3 +226,11 @@ locust -f scripts/locustfile.py --host http://localhost:8000 --headless -u 20 -r
 
 
 等压测命令运行5分钟后退出之后，若30秒内并发请求总数不超过5个，该serve application即会执行缩容操作。
+
+
+
+
+
+## 版权声明
+
+本项目由[马哥教育](http://www.magedu.com)开发，允许自由转载，但必须保留马哥教育及相关的一切标识。另外，商用需要征得马哥教育的书面同意。
