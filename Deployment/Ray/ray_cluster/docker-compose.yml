@@ -20,8 +20,7 @@ services:
         reservations:
           devices:
             - driver: nvidia
-              #count: all  # 如果 Head 也参与 GPU 计算，设置为 all 或 1
-              device_ids: ['0']
+              count: 0
               capabilities: [gpu]
     env_file:
       - .env
@@ -29,19 +28,44 @@ services:
       ray start --head 
       --port=6379 
       --dashboard-host=0.0.0.0 
-      --num-gpus=1 
+      --num-gpus=0 
       --disable-usage-stats
       --block
 
   # --- Worker 节点 ---
-  ray-worker:
+  ray-worker-1:
     image: rayproject/ray:2.50.1-gpu
     restart: always
     depends_on:
       - ray-head
     shm_size: '4gb'
     volumes:
-      - ./logs/workers:/tmp/ray
+      - ./logs/worker1:/tmp/ray
+    networks:
+      - ray-net
+    deploy:
+      replicas: 1  # 启动 1 个 Worker 容器
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              #count: 1  # 每个 Worker 容器分配 1 块 GPU
+              device_ids: ['0']
+              capabilities: [gpu]
+    command: >
+      ray start 
+      --address=ray-head:6379 
+      --num-gpus=1 
+      --block
+
+  ray-worker-2:
+    image: rayproject/ray:2.50.1-gpu
+    restart: always
+    depends_on:
+      - ray-head
+    shm_size: '4gb'
+    volumes:
+      - ./logs/worker2:/tmp/ray
     networks:
       - ray-net
     deploy:
