@@ -1,4 +1,4 @@
-version: '3.9'
+version: '3.8'
 
 services:
   ray-head:
@@ -45,6 +45,15 @@ services:
       ray-head:
         condition: service_healthy
     ipc: host
+    environment:
+      - VLLM_USE_V1=1
+      - NCCL_P2P_DISABLE=1           # 禁用跨容器 P2P
+      - NCCL_IB_DISABLE=1            # 禁用 Infiniband (除非有)
+      - NCCL_SOCKET_IFNAME=eth0      # 指定 Docker 内部网卡名
+      #- NCCL_DEBUG=INFO              # 建议开启，初始化失败时看原因
+      #- NCCL_DEBUG_SUBSYS=ALL
+      #- RAY_RESOURCEMANAGER_ALLOW_MISSING_GPU=1 # 防止调度死锁
+      #- RAY_LOG_TO_STDERR=1          # 强制将日志推送到 stdout，方便 docker logs 查看
     volumes:
       - ./logs/worker1:/tmp/ray # 独立日志路径
       - /Models/Pretrained_Models:/Models/Pretrained_Models
@@ -70,6 +79,15 @@ services:
       ray-head:
         condition: service_healthy
     ipc: host
+    environment:
+      - VLLM_USE_V1=1
+      - NCCL_P2P_DISABLE=1           # 禁用跨容器 P2P
+      - NCCL_IB_DISABLE=1            # 禁用 Infiniband (除非有)
+      - NCCL_SOCKET_IFNAME=eth0      # 指定 Docker 内部网卡名
+      #- NCCL_DEBUG=INFO              # 建议开启，初始化失败时看原因
+      #- NCCL_DEBUG_SUBSYS=ALL
+      #- RAY_RESOURCEMANAGER_ALLOW_MISSING_GPU=1 # 防止调度死锁
+      #- RAY_LOG_TO_STDERR=1          # 强制将日志推送到 stdout，方便 docker logs 查看
     volumes:
       - ./logs/worker2:/tmp/ray # 独立日志路径
       - /Models/Pretrained_Models:/Models/Pretrained_Models

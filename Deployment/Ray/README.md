@@ -355,6 +355,14 @@ ray job submit --address http://${RAY-HEAD-IP}:8265  --working-dir ./  -- python
 
 
 
+另外，需要特别说明的是，vLLM v1引擎的分布式TP高度依赖NCCL进行GPU间通信，但跨容器（跨node）的tensor parallelism（TP）通信非常困难，甚至基本无法高效工作，因此，非常不建议在基于Docker容器的环境中（尤其是使用Bridge类型网络）进行跨node的tensor parallel。vLLM官方立场如下：
+
+- 跨node tensor parallelism强烈不推荐，除非有InfiniBand + GPUDirect RDMA（bridge网络只支持TCP）。
+- 即使NCCL能回退到TCP，vLLM的CustomAllreduce等优化层仍会尝试P2P检查，导致崩溃。
+- 推荐：单node内多GPU用TP；跨node用pipeline parallelism (PP)。
+
+
+
 ## serve run案例
 
 serve run 是 Ray Serve 官方提供的最重要、最常用的“开发神器”命令。 它本质上是“编程式 serve.run() 的 CLI 包装”，几乎一行命令就可以把整个 Serve Application 启动起来。

@@ -1,0 +1,31 @@
+applications:
+  - name: qwen3_app
+    route_prefix: /
+    import_path: ray.serve.llm:build_openai_app
+    args:
+      llm_configs:
+        - model_loading_config:
+            model_id: qwen3
+            # 确保此路径在 Worker 容器中通过 Volumes 挂载是正确的
+            model_source: /Models/Pretrained_Models/Qwen3-0.6B/
+          deployment_config:
+            autoscaling_config:
+              min_replicas: 1
+              max_replicas: 1
+              target_ongoing_requests: 5
+              upscale_delay: 5.0
+              downscale_delay: 30.0
+            max_ongoing_requests: 64
+            #ray_actor_options:
+              #num_gpus: 0  # 副本Actor不直接占GPU，由vLLM内部去申请 
+          engine_kwargs:
+            tensor_parallel_size: 1    # 每个worker单GPU
+            pipeline_parallel_size: 2        # 跨两个worker/node进行层并行
+            # 降低显存占用率，提高初始化成功率
+            gpu_memory_utilization: 0.85
+            max_model_len: 4096
+            trust_remote_code: true
+            # 强制使用 Ray 作为分布式后端, 持跨node
+            distributed_executor_backend: "ray"
+            # V0 引擎建议开启 enforce_eager 以减少初始化时的 CUDA 图捕获开销
+            enforce_eager: true
