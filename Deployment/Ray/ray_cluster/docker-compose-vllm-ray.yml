@@ -1,0 +1,94 @@
+version: '3.9'
+
+services:
+  ray-head:
+    #image: vllm/vllm-openai:v0.11.2
+    image: vllm-ray:latest
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    container_name: ray-head
+    restart: always
+    ports:
+      - "6379:6379"
+      - "8265:8265"
+      - "10001:10001"
+      - "8000:8000"
+    ipc: host
+    networks:
+      - ray-net
+    volumes:
+      - ./logs/head:/tmp/ray
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 0 # Head 不使用 GPU
+              capabilities: [gpu]
+    entrypoint: ["/bin/bash", "-c"]
+    #command: ["sleep 99999"]
+    command: ["ray start --head --port=6379 --dashboard-host=0.0.0.0 --num-gpus=0 --disable-usage-stats --block"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-I", "http://localhost:8265/"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  ray-worker-1:
+    #image: vllm/vllm-openai:v0.11.2
+    image: vllm-ray:latest
+    container_name: ray-worker-1
+    restart: always
+    depends_on:
+      ray-head:
+        condition: service_healthy
+    ipc: host
+    volumes:
+      - ./logs/worker1:/tmp/ray # 独立日志路径
+      - /Models/Pretrained_Models:/Models/Pretrained_Models
+    networks:
+      - ray-net
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['0'] # 物理卡 0
+              capabilities: [gpu]
+    entrypoint: ["/bin/bash", "-c"]
+    #command: ["sleep 99999"]
+    command: ["ray start --num-gpus=1 --address='ray-head:6379' --block"]
+
+  ray-worker-2:
+    #image: vllm/vllm-openai:v0.11.2
+    image: vllm-ray:latest
+    container_name: ray-worker-2
+    restart: always
+    depends_on:
+      ray-head:
+        condition: service_healthy
+    ipc: host
+    volumes:
+      - ./logs/worker2:/tmp/ray # 独立日志路径
+      - /Models/Pretrained_Models:/Models/Pretrained_Models
+    networks:
+      - ray-net
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['2'] # 物理卡 2
+              capabilities: [gpu]
+    entrypoint: ["/bin/bash", "-c"]
+    #command: ["sleep 99999"]
+    command: ["ray start --num-gpus=1 --address='ray-head:6379' --block"]
+
+networks:
+  ray-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
