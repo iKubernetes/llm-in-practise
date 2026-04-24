@@ -1,0 +1,83 @@
+# qwen3-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qwen3-8b-vllm
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: qwen3-8b
+  template:
+    metadata:
+      labels:
+        app: qwen3-8b
+    spec:
+      runtimeClassName: nvidia
+      nodeSelector:
+        kubernetes.io/hostname: k8s-node01.magedu.com
+      volumes:
+        - name: model
+          persistentVolumeClaim:
+            claimName: qwen3-8b-model
+            readOnly: true
+      containers:
+        - name: vllm
+          #image: vllm/vllm-openai:v0.8.4
+          image: vllm/vllm-openai:v0.19.1-cu130-ubuntu2404
+          command:
+            - sh
+            - -c
+            - |
+              vllm serve /models/Qwen3-8B \
+                --port 8000 \
+                --host 0.0.0.0 \
+                --tensor-parallel-size 1 \
+                --max-model-len 32768 \
+                --gpu-memory-utilization 0.90 \
+                --trust-remote-code \
+                --dtype bfloat16 \
+                --enable-prefix-caching
+          ports:
+            - containerPort: 8000
+              name: http
+          resources:
+            limits:
+              nvidia.com/gpu: "1"
+              cpu: "8"
+              memory: "16Gi"
+            requests:
+              nvidia.com/gpu: "1"
+              cpu: "8"
+              memory: "16Gi"
+          volumeMounts:
+            - name: model
+              mountPath: /models/Qwen3-8B
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 60
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 120
+            periodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: qwen3-8b-service
+  namespace: default
+spec:
+  selector:
+    app: qwen3-8b
+  ports:
+    - port: 8000
+      targetPort: 8000
+      name: http
+  type: ClusterIP

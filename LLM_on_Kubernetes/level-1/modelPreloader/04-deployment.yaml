@@ -1,0 +1,123 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-qwen3-8b
+  namespace: llm-serving
+  labels:
+    app: vllm-qwen3-8b
+    model: qwen3-8b
+    tier: level1
+spec:
+  replicas: 2
+  strategy:
+    type: Recreate  # GPU 独占资源，避免滚动更新时资源冲突
+  selector:
+    matchLabels:
+      app: vllm-qwen3-8b
+  template:
+    metadata:
+      labels:
+        app: vllm-qwen3-8b
+        model: qwen3-8b
+        tier: level2
+    spec:
+      # ========== 动态调度：GPU 节点 + 反亲和分散 ==========
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: nvidia.com/gpu.present
+                operator: In
+                values: ["true"]
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values: ["vllm-qwen3-8b"]
+            topologyKey: kubernetes.io/hostname
+      
+      runtimeClassName: nvidia
+      
+      # ========== InitContainer：等待 DaemonSet 预热就绪 ==========
+      initContainers:
+      - name: wait-model-ready
+        image: busybox:1.36
+        command:
+        - sh
+        - -c
+        - |
+          set -e
+          CACHE_DIR=/data/models
+          READY_FILE=$CACHE_DIR/.ready
+          MAX_WAIT=600
+          
+          echo "[$(date)] 等待 DaemonSet 模型预热..."
+          for i in $(seq 1 $MAX_WAIT); do
+            if [ -f "$READY_FILE" ]; then
+              echo "[$(date)] 模型已就绪 | 版本: $(cat $CACHE_DIR/.version 2>/dev/null || echo unknown) | 大小: $(du -sh $CACHE_DIR | cut -f1)"
+              exit 0
+            fi
+            echo "[$(date)] 等待中... ($i/$MAX_WAIT)"
+            sleep 1
+          done
+          
+          echo "[$(date)] 超时：模型未就绪"
+          exit 1
+        volumeMounts:
+        - name: model-cache
+          mountPath: /data/models
+      
+      # ========== 主容器：vLLM 推理服务 ==========
+      containers:
+      - name: vllm
+        image: vllm/vllm-openai:v0.10.0
+        args:
+          - --model
+          - /data/models
+          - --served-model-name
+          - qwen3-8b
+          - --port
+          - "8000"
+          - --enable-prefix-caching
+          - --gpu-memory-utilization
+          - "0.90"
+          - --max-num-seqs
+          - "256"
+          - --max-model-len
+          - "8192"
+        ports:
+        - containerPort: 8000
+          name: http
+        resources:
+          limits:
+            nvidia.com/gpu: 1
+            memory: "16Gi"
+            cpu: "4"
+          requests:
+            memory: "16Gi"
+            cpu: "4"
+        volumeMounts:
+        - name: model-cache
+          mountPath: /data/models
+          readOnly: true
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 300
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 10
+      
+      volumes:
+      - name: model-cache
+        hostPath:
+          path: /data/models/Qwen3-8B
+          type: Directory

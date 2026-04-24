@@ -1,0 +1,166 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: vllm-qwen3-8b
+  namespace: llm-serving
+  labels:
+    app: vllm-qwen3-8b
+    model: qwen3-8b
+    tier: level1
+spec:
+  serviceName: vllm-qwen3-8b
+  replicas: 2
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app: vllm-qwen3-8b
+  
+  # ========== 每个 Pod 独立的 PVC，跟随 Pod 调度到节点 ==========
+  volumeClaimTemplates:
+  - metadata:
+      name: model-data
+      labels:
+        app: vllm-qwen3-8b
+        model: qwen3-8b
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      storageClassName: openebs-hostpath
+      resources:
+        requests:
+          storage: 25Gi
+  
+  template:
+    metadata:
+      labels:
+        app: vllm-qwen3-8b
+        model: qwen3-8b
+        tier: level2
+    spec:
+      # ========== 动态调度：GPU 节点 + 反亲和分散 ==========
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: nvidia.com/gpu.present
+                operator: In
+                values: ["true"]
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values: ["vllm-qwen3-8b"]
+            topologyKey: kubernetes.io/hostname
+      
+      runtimeClassName: nvidia
+      
+      # ========== InitContainer：等待 DaemonSet 预热 + 复制到 PVC ==========
+      initContainers:
+      - name: wait-model-ready
+        image: busybox:1.36
+        command:
+        - sh
+        - -c
+        - |
+          set -e
+          CACHE_DIR=/data/models
+          READY_FILE=$CACHE_DIR/.ready
+          PVC_DIR=/data/models
+          MAX_WAIT=600
+          
+          echo "[$(date)] 等待 DaemonSet 模型预热..."
+          for i in $(seq 1 $MAX_WAIT); do
+            if [ -f "$READY_FILE" ]; then
+              echo "[$(date)] 检测到就绪标志 | 版本: $(cat $CACHE_DIR/.version 2>/dev/null || echo unknown)"
+              break
+            fi
+            echo "[$(date)] 等待中... ($i/$MAX_WAIT)"
+            sleep 1
+          done
+          
+          if [ ! -f "$READY_FILE" ]; then
+            echo "[$(date)] 超时：模型未就绪"
+            exit 1
+          fi
+          
+          echo "[$(date)] 从 hostPath 复制模型到 PVC..."
+          mkdir -p $PVC_DIR
+          cp -r $CACHE_DIR/* $PVC_DIR/
+          
+          echo "[$(date)] 复制完成。PVC 大小: $(du -sh $PVC_DIR | cut -f1)"
+        volumeMounts:
+        - name: model-cache-host
+          mountPath: /data/models
+        - name: model-data
+          mountPath: /data/models
+      
+      # ========== 主容器：vLLM 推理服务 ==========
+      containers:
+      - name: vllm
+        image: vllm/vllm-openai:v0.10.0
+        args:
+          - --model
+          - /data/models
+          - --served-model-name
+          - qwen3-8b
+          - --port
+          - "8000"
+          - --enable-prefix-caching
+          - --gpu-memory-utilization
+          - "0.90"
+          - --max-num-seqs
+          - "256"
+          - --max-model-len
+          - "8192"
+        ports:
+        - containerPort: 8000
+          name: http
+        resources:
+          limits:
+            nvidia.com/gpu: 1
+            memory: "16Gi"
+            cpu: "4"
+          requests:
+            memory: "16Gi"
+            cpu: "4"
+        volumeMounts:
+        - name: model-data
+          mountPath: /data/models
+          readOnly: true
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 300
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 10
+      
+      volumes:
+      - name: model-cache-host
+        hostPath:
+          path: /data/models/Qwen3-8B
+          type: Directory
+---
+# StatefulSet 依赖的 Headless Service（用于稳定网络标识）
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-qwen3-8b
+  namespace: llm-serving
+  labels:
+    app: vllm-qwen3-8b
+spec:
+  clusterIP: None
+  selector:
+    app: vllm-qwen3-8b
+  ports:
+  - port: 8000
+    name: http

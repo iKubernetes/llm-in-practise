@@ -1,0 +1,14 @@
+# 05-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-qwen3-8b
+  namespace: llm-serving
+spec:
+  selector:
+    app: vllm-qwen3-8b
+    model: qwen3-8b
+  ports:
+  - port: 8000
+    targetPort: 8000
+  # type: LoadBalancer

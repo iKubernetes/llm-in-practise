@@ -1,0 +1,13 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: model-pvc-qwen3-8b
+  namespace: llm-serving
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: openebs-hostpath   # 明确使用 OpenEBS hostpath 动态供给
+  resources:
+    requests:
+      storage: 25Gi   # Qwen3-8B 约 16-18GB，预留余量

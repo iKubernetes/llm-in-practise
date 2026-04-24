@@ -1,0 +1,28 @@
+# qwen3-ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: qwen3-8b-ingress
+  namespace: default
+  annotations:
+    # Nginx 特定配置
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"  # 若未配置 TLS，禁用 HTTPS 强转
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"  # 允许大请求体（长文本输入）
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"  # LLM 生成可能耗时较长
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
+    # 连接保持，减少长连接重建开销
+    nginx.ingress.kubernetes.io/connection-proxy-header: "keep-alive"
+spec:
+  ingressClassName: nginx  # 明确指定使用 nginx IngressClass
+  rules:
+    - host: qwen3.magedu.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: qwen3-8b-service
+                port:
+                  number: 8000

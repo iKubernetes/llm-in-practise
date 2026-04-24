@@ -1,0 +1,39 @@
+---
+# 06-ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: vllm-qwen3-8b
+  namespace: llm-serving
+  annotations:
+    # ========== Ingress Nginx 注解 ==========
+    
+    # WebSocket 支持（vLLM 流式输出必需）
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    
+    # 长连接保持（推理请求可能持续数分钟）
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "600"
+    
+    # 请求体大小限制（防止大 prompt 被截断）
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    
+    # 可选：启用 CORS（如果前端跨域调用）
+    # nginx.ingress.kubernetes.io/enable-cors: "true"
+    
+    # 可选：速率限制（生产环境建议启用）
+    # nginx.ingress.kubernetes.io/limit-rps: "10"
+    
+spec:
+  ingressClassName: nginx                    # 明确指定 Ingress-Nginx
+  rules:
+  - host: llm.magedu.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: vllm-qwen3-8b
+            port:
+              number: 8000
