@@ -1,0 +1,89 @@
+# open-webui-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: open-webui
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: open-webui
+  template:
+    metadata:
+      labels:
+        app: open-webui
+    spec:
+      containers:
+        - name: open-webui
+          image: ghcr.io/open-webui/open-webui:main
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            # 核心配置：指向 Qwen3 的 OpenAI 兼容 API
+            - name: OPENAI_API_BASE_URL
+              value: "http://vllm-service.llm-inference.svc.cluster.local:8000/v1"
+            - name: OPENAI_API_KEY
+              value: "EMPTY"  # vLLM 默认不验证 API Key
+            # 禁用其他默认后端，强制使用 OpenAI 模式
+            - name: ENABLE_OLLAMA_API
+              value: "False"
+            - name: ENABLE_OPENAI_API
+              value: "True"
+            # 可选：预设默认模型
+            - name: DEFAULT_MODEL
+              #value: "Qwen3-8B"
+              value: "qwen3-8b"
+            # 持久化数据（对话记录、用户配置）
+            - name: DATA_DIR
+              value: "/app/backend/data"
+            # 代理配置
+            - name: HTTP_PROXY
+              value: "http://172.29.0.1:10808"
+            - name: HTTPS_PROXY
+              value: "http://172.29.0.1:10808"
+            - name: NO_PROXY
+              value: "localhost,127.0.0.1,::1,.svc.cluster.local,10.96.0.0/12,172.29.0.0/16,192.168.0.0/16,*.magedu.com,10.244.0.0/16"
+          volumeMounts:
+            - name: data
+              mountPath: /app/backend/data
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "2"
+              memory: "4Gi"
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: open-webui-data
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: open-webui-data
+  namespace: default
+spec:
+  storageClassName: openebs-hostpath
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: open-webui-service
+  namespace: default
+spec:
+  selector:
+    app: open-webui
+  ports:
+    - port: 8080
+      targetPort: 8080
+      name: http
+  type: LoadBalancer
+---

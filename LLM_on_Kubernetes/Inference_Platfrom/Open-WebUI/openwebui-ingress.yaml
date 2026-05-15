@@ -1,0 +1,32 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: openwebui-ingress
+  namespace: default               # 根据实际命名空间修改
+  annotations:
+    # 兼容旧版 Ingress 资源指定 Ingress Class（保留）
+    kubernetes.io/ingress.class: nginx
+
+    # 上传文件 / 大请求体支持（设置为 0 表示不限制，可按需调整为具体大小）
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+
+    # 长连接超时，适配 WebSocket 及长时间推理请求
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+
+    # 若使用 cert-manager 自动签发 TLS 证书，可取消下行注释
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+
+spec:
+  ingressClassName: nginx      
+  rules:
+  - host: openwebui.magedu.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: open-webui-service
+            port:
+              number: 8080         # Open WebUI 默认服务端口

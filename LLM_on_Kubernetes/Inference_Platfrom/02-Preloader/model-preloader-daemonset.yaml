@@ -1,0 +1,108 @@
+# model-preloader-daemonset.yaml
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: model-preloader
+  namespace: llm-inference
+  labels:
+    app: model-preloader
+spec:
+  selector:
+    matchLabels:
+      app: model-preloader
+  template:
+    metadata:
+      labels:
+        app: model-preloader
+    spec:
+      # 仅调度到已知的两个 GPU 节点
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                - k8s-node01.magedu.com
+                - k8s-node03.magedu.com
+      initContainers:
+      - name: model-puller
+        image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+        env:
+        - name: MINIO_ENDPOINT
+          value: "http://minio.minio.svc.cluster.local:9000"
+        - name: MINIO_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: minio-credentials
+              key: MINIO_ACCESS_KEY
+        - name: MINIO_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: minio-credentials
+              key: MINIO_SECRET_KEY
+        command:
+        - sh
+        - -c
+        - |
+          set -e
+          
+          # 配置 MinIO 别名
+          mc alias set models $MINIO_ENDPOINT $MINIO_ACCESS_KEY $MINIO_SECRET_KEY
+          
+          MODEL_DIR=/data/models/qwen3-8b
+          READY_FILE=$MODEL_DIR/.ready
+          
+          # ========== 幂等性检查：已存在则跳过 ==========
+          if [ -f "$READY_FILE" ]; then
+            echo "[$(date)] 模型已存在于 HostPath，跳过下载。"
+            echo "[$(date)] 本地大小: $(du -sh $MODEL_DIR | cut -f1)"
+            echo "[$(date)] 文件列表:"
+            ls -lh $MODEL_DIR/*.safetensors 2>/dev/null | head -5
+            exit 0
+          fi
+          
+          echo "[$(date)] 首次同步：从MinIO下载 llm-models/Qwen3-8B ..."
+          mkdir -p $MODEL_DIR
+          
+          # 从MinIO增量同步到HostPath挂载路径
+          mc mirror --overwrite --remove \
+            models/llm-models/Qwen3-8B/ \
+            $MODEL_DIR/
+          
+          # 写入就绪标志（关键：后续重建秒级跳过）
+          touch $READY_FILE
+          echo "[$(date)] 同步完成。总大小: $(du -sh $MODEL_DIR | cut -f1)"
+          
+          # 关键文件校验
+          for FILE in config.json tokenizer.json; do
+            if [ ! -f "$MODEL_DIR/$FILE" ]; then
+              echo "[$(date)] 关键文件缺失: $FILE"
+              exit 1
+            fi
+          done
+          echo "[$(date)] 关键文件校验通过"
+        volumeMounts:
+        - name: host-model-cache
+          mountPath: /data/models
+        resources:
+          limits:
+            memory: "2Gi"
+            cpu: "2"
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+      containers:
+      # Preloader 完成下载后，由 pause 容器保持 Pod Running
+      - name: pause
+        image: registry.k8s.io/pause:3.9
+        resources:
+          limits:
+            memory: "64Mi"
+            cpu: "100m"
+      volumes:
+      - name: host-model-cache
+        hostPath:
+          path: /data/models
+          type: DirectoryOrCreate

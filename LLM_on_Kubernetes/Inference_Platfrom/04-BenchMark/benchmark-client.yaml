@@ -1,0 +1,35 @@
+# benchmark-client.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: benchmark-client
+  namespace: llm-inference
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: benchmark-client
+  template:
+    metadata:
+      labels:
+        app: benchmark-client
+    spec:
+      containers:
+      - name: client
+        image: vllm/vllm-openai:v0.11.2
+        command: ["sleep", "infinity"]
+        resources:
+          limits:
+            memory: "8Gi"
+            cpu: "4"
+          requests:
+            memory: "4Gi"
+            cpu: "2"
+        volumeMounts:
+        - name: host-model-cache
+          mountPath: /data/models
+      volumes:
+      - name: host-model-cache
+        hostPath:
+          path: /data/models
+          type: DirectoryOrCreate

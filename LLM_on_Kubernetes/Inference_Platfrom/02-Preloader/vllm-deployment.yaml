@@ -1,0 +1,129 @@
+# vllm-deployment-hostpath.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-qwen3-8b
+  namespace: llm-inference
+  labels:
+    app: vllm-qwen3-8b
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm-qwen3-8b
+  template:
+    metadata:
+      labels:
+        app: vllm-qwen3-8b
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: k8s-node01.magedu.com
+      # 轻量就绪检查：确保 DaemonSet 已完成预热（可选但强烈建议）
+      initContainers:
+      - name: model-ready-check
+        image: busybox:1.36
+        command:
+        - sh
+        - -c
+        - |
+          for i in $(seq 1 300); do
+            if [ -f /data/models/qwen3-8b/.ready ]; then
+              echo "[$(date)] Model ready file detected. Proceeding to vLLM startup."
+              exit 0
+            fi
+            echo "[$(date)] Waiting for model preloader on this node... ($i/300)"
+            sleep 2
+          done
+          echo "[$(date)] Timeout: model preloader did not complete on this node"
+          exit 1
+        volumeMounts:
+        - name: host-model-cache
+          mountPath: /data/models
+        resources:
+          limits:
+            memory: "64Mi"
+            cpu: "100m"
+      containers:
+      - name: vllm
+        image: vllm/vllm-openai:v0.11.2
+        args:
+          - /data/models/qwen3-8b
+          - --served-model-name
+          - qwen3-8b
+          - --dtype
+          - bfloat16
+          - --tensor-parallel-size
+          - "1"
+          - --max-model-len
+          - "4096"
+          - --gpu-memory-utilization
+          - "0.9"
+          - --host
+          - 0.0.0.0
+          - --port
+          - "8000"
+          - --uvicorn-log-level
+          - info
+        ports:
+        - containerPort: 8000
+          name: http
+          protocol: TCP
+        resources:
+          limits:
+            nvidia.com/gpu: "1"
+            memory: "16Gi"
+            cpu: "4"
+          requests:
+            nvidia.com/gpu: "1"
+            memory: "16Gi"
+            cpu: "4"
+        volumeMounts:
+        - name: host-model-cache
+          mountPath: /data/models
+          readOnly: true
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 300
+          periodSeconds: 30
+          timeoutSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 120
+          periodSeconds: 15
+          timeoutSeconds: 5
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          failureThreshold: 60
+      volumes:
+      - name: host-model-cache
+        hostPath:
+          path: /data/models
+          type: DirectoryOrCreate
+---
+# Service 与 Ingress 保持不变
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-service
+  namespace: llm-inference
+spec:
+  type: ClusterIP
+  selector:
+    app: vllm-qwen3-8b
+  ports:
+  - port: 8000
+    targetPort: 8000
+    name: http
+---

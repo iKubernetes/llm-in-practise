@@ -1,0 +1,125 @@
+# vllm-statefulset.yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: vllm-qwen3-8b
+  namespace: llm-inference
+  labels:
+    app: vllm-qwen3-8b
+spec:
+  serviceName: vllm-headless
+  replicas: 2
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app: vllm-qwen3-8b
+  template:
+    metadata:
+      labels:
+        app: vllm-qwen3-8b
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      # ========== Pod 反亲和性：强制跨节点分散 ==========
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - vllm-qwen3-8b
+            topologyKey: kubernetes.io/hostname
+      # 轻量就绪检查：依赖步骤 5 的 DaemonSet Preloader
+      initContainers:
+      - name: model-ready-check
+        image: busybox:1.36
+        command:
+        - sh
+        - -c
+        - |
+          for i in $(seq 1 300); do
+            if [ -f /data/models/qwen3-8b/.ready ]; then
+              echo "[$(date)] Model ready file detected on this node. Proceeding."
+              exit 0
+            fi
+            echo "[$(date)] Waiting for model preloader... ($i/300)"
+            sleep 2
+          done
+          echo "[$(date)] Timeout: model preloader not ready on this node"
+          exit 1
+        volumeMounts:
+        - name: host-model-cache
+          mountPath: /data/models
+        resources:
+          limits:
+            memory: "64Mi"
+            cpu: "100m"
+      containers:
+      - name: vllm
+        image: vllm/vllm-openai:v0.11.2
+        args:
+          - /data/models/qwen3-8b
+          - --served-model-name
+          - qwen3-8b
+          - --dtype
+          - bfloat16
+          - --tensor-parallel-size
+          - "1"
+          - --max-model-len
+          - "4096"
+          - --gpu-memory-utilization
+          - "0.9"
+          - --host
+          - 0.0.0.0
+          - --port
+          - "8000"
+          - --uvicorn-log-level
+          - info
+          - --enable-prefix-caching
+        ports:
+        - containerPort: 8000
+          name: http
+          protocol: TCP
+        resources:
+          limits:
+            nvidia.com/gpu: "1"
+            memory: "16Gi"
+            cpu: "4"
+          requests:
+            nvidia.com/gpu: "1"
+            memory: "16Gi"
+            cpu: "4"
+        volumeMounts:
+        - name: host-model-cache
+          mountPath: /data/models
+          readOnly: true
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 300
+          periodSeconds: 30
+          timeoutSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 120
+          periodSeconds: 15
+          timeoutSeconds: 5
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          failureThreshold: 60
+      volumes:
+      - name: host-model-cache
+        hostPath:
+          path: /data/models
+          type: DirectoryOrCreate
