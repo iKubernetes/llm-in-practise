@@ -141,6 +141,7 @@ spec:
                    models/llm-models/Qwen3-8b/ \
                    "$MODEL_DIR/"; then
                 echo "[$(date)] 修复完成"
+                touch $MODEL_DIR/.ready
               else
                 echo "[$(date)] 修复失败，将在下一轮重试"
               fi
