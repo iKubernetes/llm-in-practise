@@ -16,9 +16,11 @@ spec:
       prometheus:
         address: http://prometheus-server.monitoring.svc.cluster.local:9090
         query: |
-          histogram_quantile(0.99, 
-            sum(rate(vllm:time_to_first_token_seconds_bucket{namespace="llm-inference"}[2m])) by (le)
-          ) * 1000
+          scalar(
+            histogram_quantile(0.99, 
+              sum(rate(vllm:time_to_first_token_seconds_bucket{namespace="llm-inference"}[2m])) by (le)
+            ) * 1000
+          ) or on() vector(9999)
 
   # ========== 指标 2：错误率 < 1% ==========
   - name: error-rate
@@ -27,11 +29,19 @@ spec:
     successCondition: result < 0.01
     provider:
       prometheus:
-        address: http://prometheus.monitoring.svc.cluster.local
+        address: http://prometheus-server.monitoring.svc.cluster.local:9090
         query: |
-          sum(rate(vllm:request_failure_total{namespace="llm-inference"}[2m])) 
-          / 
-          sum(rate(vllm:request_success_total{namespace="llm-inference"}[2m]))
+          scalar(
+            (
+              sum(rate(vllm:request_failure_total{namespace="llm-inference"}[2m])) 
+              or on() vector(0)
+            )
+            / 
+            (
+              sum(rate(vllm:request_success_total{namespace="llm-inference"}[2m])) 
+              or on() vector(1)
+            )
+          ) or on() vector(1)
 
   # ========== 指标 3：GPU 显存使用率 < 90%（AWQ 后仍有充足余量） ==========
   - name: gpu-memory-saturation
@@ -42,8 +52,10 @@ spec:
       prometheus:
         address: http://prometheus-server.monitoring.svc.cluster.local:9090
         query: |
-          avg(
-            nvidia_gpu_memory_used_bytes{namespace="llm-inference"} 
-            / 
-            nvidia_gpu_memory_total_bytes{namespace="llm-inference"}
-          )
+          scalar(
+            avg(
+              nvidia_gpu_memory_used_bytes{namespace="llm-inference"} 
+              / 
+              nvidia_gpu_memory_total_bytes{namespace="llm-inference"}
+            )
+          ) or on() vector(1)
