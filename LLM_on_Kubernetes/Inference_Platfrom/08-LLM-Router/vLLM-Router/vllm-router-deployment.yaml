@@ -1,0 +1,59 @@
+# vllm-router.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-router
+  namespace: llm-inference
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm-router
+  template:
+    metadata:
+      labels:
+        app: vllm-router
+    spec:
+      serviceAccountName: vllm-router
+      containers:
+      - name: router
+        image: lmcache/lmstack-router:latest
+        args:
+          - --host
+          - 0.0.0.0
+          - --port
+          - "8000"
+          - --service-discovery
+          - k8s
+          - --k8s-namespace
+          - llm-inference
+          - --k8s-service-discovery-type
+          - pod-ip
+          - --k8s-label-selector
+          - app=vllm-qwen3-8b
+          - --routing-logic
+          - prefixaware
+          - --log-level
+          - info
+        ports:
+        - containerPort: 8000
+        resources:
+          requests:
+            cpu: 500m
+            memory: 512Mi
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-router
+  namespace: llm-inference
+spec:
+  selector:
+    app: vllm-router
+  ports:
+  - port: 8000
+    targetPort: 8000
+---

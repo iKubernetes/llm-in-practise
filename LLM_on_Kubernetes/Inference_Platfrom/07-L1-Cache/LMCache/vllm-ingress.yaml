@@ -1,0 +1,25 @@
+# vllm-ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: vllm-ingress
+  namespace: llm-inference
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/upstream-keepalive-connections: "32"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: vllm.magedu.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: vllm-service
+            port:
+              number: 8000

@@ -1,0 +1,47 @@
+# vllm-canary-services.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-stable
+  namespace: llm-inference
+  labels:
+    app: vllm-qwen3-8b
+spec:
+  type: ClusterIP
+  selector:
+    app: vllm-qwen3-8b
+  ports:
+  - port: 8000
+    targetPort: 8000
+    name: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-canary
+  namespace: llm-inference
+  labels:
+    app: vllm-qwen3-8b
+spec:
+  type: ClusterIP
+  selector:
+    app: vllm-qwen3-8b
+  ports:
+  - port: 8000
+    targetPort: 8000
+    name: http
+---
+# 生产流量入口：Kong / Cache Gateway 始终指向 vllm-stable
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-service
+  namespace: llm-inference
+spec:
+  type: ClusterIP
+  selector:
+    app: vllm-qwen3-8b
+  ports:
+  - port: 8000
+    targetPort: 8000
+    name: http

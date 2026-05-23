@@ -1,0 +1,37 @@
+# vllm-services.yaml
+---
+# Headless Service：为 StatefulSet 提供稳定 Pod DNS
+# vllm-qwen3-8b-0.vllm-headless.llm-inference.svc.cluster.local
+# vllm-qwen3-8b-1.vllm-headless.llm-inference.svc.cluster.local
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-headless
+  namespace: llm-inference
+  labels:
+    app: vllm-qwen3-8b
+spec:
+  clusterIP: None
+  selector:
+    app: vllm-qwen3-8b
+  ports:
+  - port: 8000
+    targetPort: 8000
+    name: http
+---
+# ClusterIP Service：Ingress / Router 的负载均衡入口
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-service
+  namespace: llm-inference
+  labels:
+    app: vllm-qwen3-8b
+spec:
+  type: ClusterIP
+  selector:
+    app: vllm-qwen3-8b
+  ports:
+  - port: 8000
+    targetPort: 8000
+    name: http

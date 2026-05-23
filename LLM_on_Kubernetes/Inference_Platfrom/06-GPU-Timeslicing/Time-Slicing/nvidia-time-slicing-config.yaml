@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: time-slicing-rtx3090  # ConfigMap 名称
+  namespace: gpu-operator     # GPU Operator 所在命名空间，通常为此值
+data:
+  # 配置的名称，后面会有引用
+  rtx-3090: |-
+    version: v1
+    sharing:
+      timeSlicing:
+        renameByDefault: false # 建议保持为 false，使用默认资源名 nvidia.com/gpu
+        failRequestsGreaterThanOne: true # 建议设为 true，防止单个 Pod 请求超过1个GPU份额
+        resources:
+          - name: nvidia.com/gpu
+            replicas: 2 # 可根据需求调整，例如 4, 8 等

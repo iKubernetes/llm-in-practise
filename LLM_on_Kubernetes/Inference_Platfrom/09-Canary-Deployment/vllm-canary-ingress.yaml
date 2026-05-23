@@ -1,0 +1,62 @@
+# vllm-canary-ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: vllm-stable
+  namespace: llm-inference
+  annotations:
+    # ========== 核心代理配置 ==========
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+    # SSE / streaming 支持：关闭缓冲
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-cache: "off"
+    # 保持长连接（SSE 需要 HTTP/1.1）
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    # 传递真实客户端 IP
+    nginx.ingress.kubernetes.io/use-forwarded-headers: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: vllm.magedu.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: vllm-stable
+            port:
+              number: 8000
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: vllm-stable-canary
+  namespace: llm-inference
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-cache: "off"
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    nginx.ingress.kubernetes.io/use-forwarded-headers: "true"
+    # ========== Canary 核心配置 ==========
+    nginx.ingress.kubernetes.io/canary: "true"
+    # 初始权重 0，Argo Rollouts 会动态 patch
+    nginx.ingress.kubernetes.io/canary-weight: "0"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: vllm.magedu.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: vllm-canary
+            port:
+              number: 8000

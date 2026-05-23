@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: llm-d
+  namespace: llm-inference
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: llm-d-pod-reader
+  namespace: llm-inference
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: llm-d-pod-reader
+  namespace: llm-inference
+subjects:
+- kind: ServiceAccount
+  name: llm-d
+  namespace: llm-inference
+roleRef:
+  kind: Role
+  name: llm-d-pod-reader
+  apiGroup: rbac.authorization.k8s.io

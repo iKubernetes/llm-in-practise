@@ -1,0 +1,49 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: vllm-qwen3-8b-scaler
+  namespace: llm-inference
+spec:
+  scaleTargetRef:
+    apiVersion: argoproj.io/v1alpha1
+    kind: Rollout
+    name: vllm-qwen3-8b
+  pollingInterval: 15
+  cooldownPeriod: 300
+  minReplicaCount: 1
+  maxReplicaCount: 4  # 匹配 4 逻辑 GPU
+  fallback:
+    failureThreshold: 3
+    replicas: 1
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleUp:
+          stabilizationWindowSeconds: 60
+          policies:
+          - type: Pods
+            value: 1
+            periodSeconds: 60
+          selectPolicy: Max
+        scaleDown:
+          stabilizationWindowSeconds: 300
+          policies:
+          - type: Pods
+            value: 1
+            periodSeconds: 120
+          selectPolicy: Min
+  triggers:
+  - type: prometheus
+    metadata:
+      serverAddress: http://prometheus-server.monitoring.svc.cluster.local:9090
+      metricName: vllm-num-requests-waiting
+      query: |
+        sum(vllm:num_requests_waiting{namespace="llm-inference"})
+      threshold: "2"
+  - type: prometheus
+    metadata:
+      serverAddress: http://prometheus-server.monitoring.svc.cluster.local:9090
+      metricName: vllm-p99-ttft-ms
+      query: |
+        histogram_quantile(0.99, sum(rate(vllm:time_to_first_token_seconds_bucket{namespace="llm-inference"}[2m])) by (le)) * 1000
+      threshold: "600"

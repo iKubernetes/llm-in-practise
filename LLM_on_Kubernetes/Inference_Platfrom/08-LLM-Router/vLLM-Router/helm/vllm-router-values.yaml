@@ -1,0 +1,34 @@
+# custom-router-values.yaml
+servingEngineSpec:
+  enabled: false
+
+routerSpec:
+  enabled: true
+  serviceDiscovery: k8s
+  k8sServiceDiscoveryType: pod-ip
+  k8sNamespace: llm-inference
+  k8sLabelSelector: app=vllm-qwen3-8b
+  routingLogic: cache_aware
+  replicaCount: 1
+  
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+  
+  # Service 配置（注意扁平命名）
+  serviceType: ClusterIP
+  servicePort: 8000
+  
+  # Ingress 配置（注意数组结构）
+  ingress:
+    enabled: true
+    className: nginx
+    hosts:
+      - host: vllm.magedu.com
+        paths:
+          - path: /
+            pathType: Prefix

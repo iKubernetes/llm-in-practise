@@ -49,7 +49,7 @@ spec:
           # 配置 MinIO 别名
           mc alias set models $MINIO_ENDPOINT $MINIO_ACCESS_KEY $MINIO_SECRET_KEY
 
-          MODEL_DIR=/data/models/qwen3-8b
+          MODEL_DIR=/data/models/qwen3-8b-awq
           READY_FILE=$MODEL_DIR/.ready
 
           # ========== 幂等性检查：已存在则跳过 ==========
@@ -66,7 +66,7 @@ spec:
 
           # 从MinIO增量同步到HostPath挂载路径
           mc mirror --overwrite --remove \
-            models/llm-models/Qwen3-8B/ \
+            models/llm-models/Qwen3-8B-AWQ/ \
             $MODEL_DIR/
 
           # 写入就绪标志（关键：后续重建秒级跳过）
@@ -114,7 +114,7 @@ spec:
           # 配置 MinIO 别名
           mc alias set models $MINIO_ENDPOINT $MINIO_ACCESS_KEY $MINIO_SECRET_KEY
 
-          MODEL_DIR=/data/models/qwen3-8b
+          MODEL_DIR=/data/models/qwen3-8b-awq
           CHECK_INTERVAL=60
 
           echo "[$(date)] 模型监控已启动，检查间隔 ${CHECK_INTERVAL}s"
@@ -138,7 +138,7 @@ spec:
             if [ "$missing" = true ]; then
               echo "[$(date)] 检测到模型不完整，开始从 MinIO 修复..."
               if mc mirror --overwrite --remove \
-                   models/llm-models/Qwen3-8B/ \
+                   models/llm-models/Qwen3-8B-AWQ/ \
                    "$MODEL_DIR/"; then
                 touch $READY_FILE
                 echo "[$(date)] 修复完成"

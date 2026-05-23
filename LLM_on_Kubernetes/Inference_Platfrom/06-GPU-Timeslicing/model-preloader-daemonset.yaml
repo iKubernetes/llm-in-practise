@@ -138,9 +138,8 @@ spec:
             if [ "$missing" = true ]; then
               echo "[$(date)] 检测到模型不完整，开始从 MinIO 修复..."
               if mc mirror --overwrite --remove \
-                   models/llm-models/Qwen3-8B/ \
+                   models/llm-models/Qwen3-8b/ \
                    "$MODEL_DIR/"; then
-                touch $READY_FILE
                 echo "[$(date)] 修复完成"
               else
                 echo "[$(date)] 修复失败，将在下一轮重试"

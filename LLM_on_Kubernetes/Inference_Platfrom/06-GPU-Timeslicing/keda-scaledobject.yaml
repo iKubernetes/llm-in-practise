@@ -1,0 +1,53 @@
+# keda-scaledobject.yaml
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: vllm-qwen3-8b-scaler
+  namespace: llm-inference
+spec:
+  scaleTargetRef:
+    name: vllm-qwen3-8b
+    kind: StatefulSet
+    apiVersion: apps/v1
+  pollingInterval: 15
+  cooldownPeriod: 300
+  minReplicaCount: 1
+  maxReplicaCount: 2  # 硬上限：与 2x2×RTX 3090 对齐
+  # ========== Fallback：Prometheus 异常时的安全策略 ==========
+  fallback:
+    failureThreshold: 3
+    replicas: 1
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleUp:
+          stabilizationWindowSeconds: 30
+          policies:
+          - type: Pods
+            value: 1
+            periodSeconds: 10
+          selectPolicy: Max
+        scaleDown:
+          stabilizationWindowSeconds: 300
+          policies:
+          - type: Pods
+            value: 1
+            periodSeconds: 30 
+          selectPolicy: Min
+  triggers:
+  # ========== 触发器 1：队列深度（主触发器，最可靠） ==========
+  - type: prometheus
+    metadata:
+      serverAddress: http://prometheus-server.monitoring.svc.cluster.local:9090
+      metricName: vllm-num-requests-waiting
+      query: |
+        sum(vllm:num_requests_waiting{namespace="llm-inference"})
+      threshold: "2"
+  # ========== 触发器 2：P99 TTFT（延迟质量兜底） ==========
+  - type: prometheus
+    metadata:
+      serverAddress: http://prometheus-server.monitoring.svc.cluster.local:9090
+      metricName: vllm-p99-ttft-ms
+      query: |
+        histogram_quantile(0.99, sum(rate(vllm:time_to_first_token_seconds_bucket{namespace="llm-inference"}[2m])) by (le)) * 1000
+      threshold: "600"

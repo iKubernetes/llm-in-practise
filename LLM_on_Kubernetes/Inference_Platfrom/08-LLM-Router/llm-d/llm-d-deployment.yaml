@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llm-d
+  namespace: llm-inference
+spec:
+  replicas: 1  # llm-d 本身不需要扩缩容
+  selector:
+    matchLabels:
+      app: llm-d
+  template:
+    metadata:
+      labels:
+        app: llm-d
+    spec:
+      serviceAccountName: llm-d 
+      containers:
+      - name: llm-d
+        #image: ghcr.io/llm-d/llm-d:latest
+        image: ghcr.io/llm-d/llm-d-cuda:v0.6.0
+        args:
+          - --config
+          - /etc/llm-d/config.yaml
+        ports:
+        - containerPort: 8000
+          name: http
+        - containerPort: 9090
+          name: metrics
+        volumeMounts:
+        - name: config
+          mountPath: /etc/llm-d
+          readOnly: true
+        resources:
+          requests:
+            cpu: 500m
+            memory: 512Mi
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: config
+        configMap:
+          name: llm-d-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: llm-d
+  namespace: llm-inference
+spec:
+  selector:
+    app: llm-d
+  ports:
+  - port: 8000
+    targetPort: 8000
+    name: http
+  - port: 9090
+    targetPort: 9090
+    name: metrics
+  type: ClusterIP
