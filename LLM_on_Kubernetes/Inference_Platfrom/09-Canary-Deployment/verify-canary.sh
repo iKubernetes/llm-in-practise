@@ -7,7 +7,7 @@ echo "=== 1. Rollout 状态 ==="
 kubectl argo rollouts get rollout $ROLLOUT -n $NAMESPACE
 
 echo -e "\n=== 2. Ingress Canary 权重 ==="
-kubectl get ingress vllm-canary -n $NAMESPACE -o jsonpath='{.metadata.annotations.nginx\.ingress\.kubernetes\.io/canary-weight}'
+kubectl get ingress vllm-qwen3-8b-vllm-stable-canary -n $NAMESPACE -o jsonpath='{.metadata.annotations.nginx\.ingress\.kubernetes\.io/canary-weight}'
 
 echo -e "\n\n=== 3. Endpoints 分布 ==="
 echo "Stable:"

@@ -21,7 +21,7 @@ spec:
       trafficRouting:
         nginx:
           stableIngress: vllm-stable
-          annotationPrefix: nginx.ingress.kubernetes.io
+          #annotationPrefix: nginx.ingress.kubernetes.io
       steps:
       # Step 1: 25% 流量 → 1 canary / (2 stable + 1 canary) = 1/3 ≈ 33%，但权重设为 25
       - setWeight: 25
